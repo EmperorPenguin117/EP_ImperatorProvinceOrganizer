@@ -1,0 +1,8 @@
+__pycache__/
+archived_scripts/
+Output_Files/
+*.bmp
+*.xcf
+Input_Files/small/
+Input_Files/mu/
+Input_Files/OldAtlantic/
