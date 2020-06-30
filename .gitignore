@@ -3,6 +3,6 @@ archived_scripts/
 Output_Files/
 *.bmp
 *.xcf
-Input_Files/small/
-Input_Files/mu/
-Input_Files/OldAtlantic/
+src/Input_Files/small/
+src/Input_Files/mu/
+src/Input_Files/OldAtlantic/
