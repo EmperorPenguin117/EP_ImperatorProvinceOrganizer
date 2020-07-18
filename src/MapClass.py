@@ -9,6 +9,7 @@ import time
 import numpy as np
 import xlrd
 from PIL import Image
+import pandas as pd
 
 
 import numpy.lib.recfunctions as nlr
@@ -29,6 +30,8 @@ OUTPUT_FILES_DIR = os.getcwd() + "\\Output_Files\\"
 
 class Map():
     def __init__(self):
+        self.get_province_modifiers((88, 11, 17))
+        self.get_country_params()  # Loads country parameters from an excel file and stores them in a list of lists
         self.initial_file_setup()
         self.load_images()  # Loading in all images used to create game files
         self.width = len(self.land_province_array)  # Width dimension of the map
@@ -36,7 +39,7 @@ class Map():
         self.create_sets()  # Creates sets of all province arrays
         self.create_lists()  # Converts the appropriate sets to lists
         self.assign_provinces()  # Main loops that creates hierarchical relationships and province histories
-        self.get_country_params()  # Loads country parameters from an excel file and stores them in a list of lists
+
         self.generate_random_names()  # Generates random names for provinces, areas, and regions
         self.write_files()  # Writes all the files that are used in game
         print("Program Complete --- %s seconds ---" % (time.time() - start_time))
@@ -109,7 +112,15 @@ class Map():
         Loads all images
         :return:
         """
-        self.test_array = self.image_to_array_no_hash("population.png")
+        self.culture_array = self.image_to_array_no_hash("culture.png")
+        self.religion_array = self.image_to_array_no_hash("religion.png")
+        self.terrain_array = self.image_to_array_no_hash("terrain.png")
+        self.trade_good_array = self.image_to_array_no_hash("trade_goods.png")
+        self.province_modifier_array = self.image_to_array_no_hash("province_modifiers.png")
+
+        self.civilized_population_array = self.image_to_array_no_hash("civilized_population.png")
+        self.tribabl_population_array = self.image_to_array_no_hash("tribal_population.png")
+
         self.land_province_array = self.image_to_array("land_provinces.png")
         self.area_array = self.image_to_array("land_areas.png")
         self.region_array = self.image_to_array("land_regions.png")
@@ -134,8 +145,8 @@ class Map():
         self.river_prov_set = set(self.river_province_array.flatten())
 
         # These sets are created for assigning provinces and areas.
-        # When a province is assigned to an area, it is removed from self.area_provs_set so it can't be assigned again
-        self.area_provs_set = self.land_provs_set.copy()
+        # When a province is assigned to an area, it is removed from self.used_provs so it can't be assigned again
+        self.used_provs = self.land_provs_set.copy()
         self.region_areas_set = self.areas_set.copy()
         self.country_provs_set = self.land_provs_set.copy()
 
@@ -162,6 +173,13 @@ class Map():
         self.river_prov_list = list(self.river_prov_set)
         self.countries_list = list(self.countries_set)
 
+        self.culture_list = [""] * len(self.land_provs_set)
+        self.religion_list = [""] * len(self.land_provs_set)
+        self.terrain_list = [""] * len(self.land_provs_set)
+        self.trade_good_list = [""] * len(self.land_provs_set)
+        self.province_modifier_list = [""] * len(self.land_provs_set)
+        self.province_population_list = [(100,100,100,101)] * len(self.land_provs_set)
+
         ######################## Initializes lists of lists for storing hierarchical assignments #######################
         self.area_prov_assign = [[] for x in range(0, len(self.areas_list))]
         self.region_area_assign = [[] for x in range(0, len(self.regions_list))]
@@ -180,14 +198,34 @@ class Map():
             areas_array_x = self.area_array[x]
             regions_array_x = self.region_array[x]
             countries_array_x = self.country_array[x]
+
+            culture_array_x = self.culture_array[x]
+            religion_array_x = self.religion_array[x]
+            terrain_array_x = self.terrain_array[x]
+            trade_good_array_x = self.trade_good_array[x]
+            province_modifier_array_x = self.province_modifier_array[x]
+            civilized_population_array_x = self.civilized_population_array[x]
+            tribal_population_array_x = self.tribabl_population_array[x]
+
+
             for y in range(self.height):
                 prov_pixel = land_prov_array_x[y]
                 area_pixel = areas_array_x[y]
                 region_pixel = regions_array_x[y]
                 country_pixel = countries_array_x[y]
-                if prov_pixel in self.area_provs_set:
+
+                culture_pixel = culture_array_x[y]
+                religion_pixel = religion_array_x[y]
+                terrain_pixel = terrain_array_x[y]
+                trade_good_pixel = trade_good_array_x[y]
+                province_modifier_pixel = province_modifier_array_x[y]
+                civilized_population_pixel = civilized_population_array_x[y]
+                tribal_population_pixel = tribal_population_array_x[y]
+                if prov_pixel in self.used_provs:
+                    self.create_prov_history(prov_pixel, culture_pixel, religion_pixel, terrain_pixel, trade_good_pixel, province_modifier_pixel, civilized_population_pixel, tribal_population_pixel)
                     self.area_prov_assign[self.areas_list.index(area_pixel)].append(self.prov_list.index(prov_pixel) + 1)
-                    self.area_provs_set.remove(prov_pixel)
+                    self.used_provs.remove(prov_pixel)
+
                     if prov_pixel in self.country_provs_set:
                         self.country_prov_assign[self.countries_list.index(country_pixel)].append(self.prov_list.index(prov_pixel) + 1)
                         self.country_provs_set.remove(prov_pixel)
@@ -202,6 +240,95 @@ class Map():
                 else:
                     pass
         print("Assignments Completed --- %s seconds ---" % (time.time() - start_time))
+
+    def create_prov_history(self, prov_pixel, cul_pix, rel_pix, ter_pix, trade_goods_pix, prov_mod_mix, civ_pop_pix, tribe_pop_pix):#, civ_pix, prov_rank_pix):
+        prov_index = self.prov_list.index(prov_pixel)
+        culture = self.get_culture(cul_pix)
+        religion = self.get_religion(rel_pix)
+        terrain = self.get_terrain(ter_pix)
+        trade_good = self.get_trade_good(trade_goods_pix)
+        province_modifier = self.get_province_modifiers(prov_mod_mix)
+        num_citizens, num_freemen, num_slaves, num_tribesmen = self.get_population(civ_pop_pix, tribe_pop_pix)
+
+        self.culture_list[prov_index] = culture
+        self.religion_list[prov_index] = religion
+        self.terrain_list[prov_index] = terrain
+        self.trade_good_list[prov_index] = trade_good
+        self.province_modifier_list[prov_index] = province_modifier
+        self.province_population_list[prov_index] = (num_citizens, num_freemen, num_slaves, num_tribesmen)
+
+    def get_culture(self, culture_pixel):
+        """
+        Returns the culture of the province
+        :return:
+        """
+        cultures_file_location = (INPUT_FILES_DIR + "cultures.xlsx")
+        c = pd.read_excel(cultures_file_location)
+
+        try:
+            cul = c['Culture'][np.where(c['RGB'] == str((culture_pixel[0], culture_pixel[1], culture_pixel[2])))[0][0]]
+        except:
+            cul = "barbarian"
+        return cul
+
+    def get_religion(self, religion_pixel):
+        """
+        Returns the religion of the province
+        :return:
+        """
+        religions_file_location = (INPUT_FILES_DIR + "religions.xlsx")
+        r = pd.read_excel(religions_file_location)
+        try:
+            rel = r['Religion'][np.where(r['RGB'] == str((religion_pixel[0], religion_pixel[1], religion_pixel[2])))[0][0]]
+        except:
+            rel = "pagan"
+        return rel
+
+    def get_terrain(self, terrain_pixel):
+        """
+        Returns the terrain of the province
+        :return:
+        """
+        terrains_file_location = (INPUT_FILES_DIR + "terrains.xlsx")
+        t = pd.read_excel(terrains_file_location)
+        try:
+            ter = t['Terrain'][np.where(t['RGB'] == str((terrain_pixel[0], terrain_pixel[1], terrain_pixel[2])))[0][0]]
+        except:
+            ter = "plains"
+        return ter
+
+    def get_trade_good(self, trade_good_pixel):
+        """
+        Returns the trade good of the province
+        :return:
+        """
+        trade_goods_file_location = (INPUT_FILES_DIR + "trade_goods.xlsx")
+        t = pd.read_excel(trade_goods_file_location)
+        try:
+            tg = t['Trade Good'][np.where(t['RGB'] == str((trade_good_pixel[0], trade_good_pixel[1], trade_good_pixel[2])))[0][0]]
+        except:
+            tg = "fur"
+        return tg
+
+    def get_province_modifiers(self, pm_pixel):
+        """
+        Returns the province modifier of the province
+        :return:
+        """
+        province_modifiers_file_location = (INPUT_FILES_DIR + "province_modifiers.xlsx")
+        p = pd.read_excel(province_modifiers_file_location)
+        try:
+            pm = p['Province Modifier'][np.where(p['RGB'] == str((pm_pixel[0], pm_pixel[1], pm_pixel[2])))[0][0]]
+        except:
+            pm = None
+        return pm
+
+    def get_population(self, civ_pop_pixel, tribal_pop_pixel):
+        num_citizens = (civ_pop_pixel[0]-100)
+        num_freemen = (civ_pop_pixel[1]-100)
+        num_slaves = (civ_pop_pixel[2] - 100)
+        num_tribesmen = (tribal_pop_pixel[0] - 100)
+        return num_citizens, num_freemen, num_slaves, num_tribesmen
 
     def write_files(self):
         self.write_province_files()
@@ -322,6 +449,7 @@ class Map():
         x = 0
         for x in range(len(self.prov_list)):
             color = self.prov_list[x]
+            ind = self.prov_list.index(color)
 
             out = "%d - " % (x + 1)
             out += self.prov_names[self.prov_list.index(color)]
@@ -335,20 +463,29 @@ class Map():
             definitions.write("%d;%s;%s;%s;%s;x;;;;;;;;;;;;;;;;;;;\n" % (
                 x + 1, pixel[0], pixel[1], pixel[2], self.prov_names[self.prov_list.index(color)]))
 
-            prov_setup.write("""
-    {0}={{ #{1}
-        terrain="plains"
-        culture="minaean"
-        religion="arabian_pantheon"
-        trade_goods="fur"
-        civilization_value=5
+            prov_setup.write(f"""
+    {x+1}={{ #{self.prov_names[ind]}
+        terrain="{self.terrain_list[ind]}"
+        culture="{self.culture_list[ind]}"
+        religion="{self.religion_list[ind]}"
+        trade_goods="{self.trade_good_list[ind]}"
+        civilization_value=0
         barbarian_power=0
         province_rank="settlement"
+        citizen={{
+            amount={self.province_population_list[ind][0]}
+        }}
+        freemen={{
+            amount={self.province_population_list[ind][1]}
+        }}
+        slaves={{
+            amount={self.province_population_list[ind][2]}
+        }}
         tribesmen={{
-            amount=1
+            amount={self.province_population_list[ind][3]}
         }}
     }}
-            """.format(x + 1, self.prov_names[self.prov_list.index(color)]))
+            """)
 
             x += 1
         # Sea
@@ -384,9 +521,9 @@ class Map():
 
         r = 0
         for rivercolor in self.river_prov_list:
-
+            ind = self.river_prov_list.index(rivercolor)
             out = "%d - " % (x + 1)
-            out += self.river_prov_names[self.river_prov_list.index(rivercolor)]
+            out += self.river_prov_names[ind]
 
             local_file.write(' PROV{0}:0 "{1}"\n'.format(x + 1, out.split(" - ")[1]))
             pixel = self.unhash_pixel(rivercolor)
