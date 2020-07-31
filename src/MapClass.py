@@ -10,7 +10,7 @@ import numpy as np
 import xlrd
 from PIL import Image
 import pandas as pd
-
+from collections import Counter
 
 import numpy.lib.recfunctions as nlr
 
@@ -22,7 +22,64 @@ start_time = time.time()
 INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\"
 OUTPUT_FILES_DIR = os.getcwd() + "\\Output_Files\\"
 
+PIXEL_CHECKER = 1
 
+class Province():
+    def __init__(self, rgb):
+        self.rgb = rgb
+        self.area = []
+        self.region = []
+        self.country = []
+        self.culture = []
+        self.religion = []
+        self.terrain = []
+        self.trade_good = []
+        self.province_modifier = []
+        self.num_citizens, self.num_freemen, self.num_slaves, self.num_tribesmen =[], [], [], []
+
+    def add_all_pixels(self, prov_pix, area_pix, region_pix, country_pix, cul_pix, rel_pix, ter_pix, trade_goods_pix, prov_mod_mix, civ_pop_pix, tribe_pop_pix):
+        self.add_area_pix(area_pix)
+        self.add_region_pix(region_pix)
+        self.add_country_pix(country_pix)
+        self.add_culture_pix(cul_pix)
+        self.add_religion_pix(rel_pix)
+        self.add_terrain_pix(ter_pix)
+        self.add_trade_good_pix(trade_goods_pix)
+        self.add_province_modifier_pix(prov_mod_mix)
+        self.add_pop_pix(civ_pop_pix, tribe_pop_pix)
+
+    def add_area_pix(self, area_pix):
+        self.area.append(area_pix)
+        
+    def add_region_pix(self, region_pix):
+        self.region.append(region_pix)
+    
+    def add_country_pix(self, country_pix):
+        self.country.append(country_pix)
+
+    def add_culture_pix(self, culture_pix):
+        self.culture.append(culture_pix)
+
+    def add_religion_pix(self, religion_pix):
+        self.religion.append(religion_pix)
+
+    def add_terrain_pix(self, terrain_pix):
+        self.terrain.append(terrain_pix)
+
+    def add_trade_good_pix(self, trade_good_pix):
+        self.trade_good.append(trade_good_pix)
+
+    def add_province_modifier_pix(self, province_modifier_pix):
+        self.province_modifier.append(province_modifier_pix)
+
+    def add_pop_pix(self, civ_pop_pix, tribe_pop_pix):
+        self.num_citizens.append(civ_pop_pix[0])
+        self.num_freemen.append(civ_pop_pix[1])
+        self.num_slaves.append(civ_pop_pix[2])
+        self.num_tribesmen.append(tribe_pop_pix[0])
+
+    def get_dominant_pixels(self):
+        self.dom_area = Counter(self.area).most_common(1)
 
 
 
@@ -181,8 +238,10 @@ class Map():
         self.province_population_list = [(100,100,100,101)] * len(self.land_provs_set)
 
         ######################## Initializes lists of lists for storing hierarchical assignments #######################
+        self.prov_obj = [None]*len(self.prov_list)
+
         self.area_prov_assign = [[] for x in range(0, len(self.areas_list))]
-        self.region_area_assign = [[] for x in range(0, len(self.regions_list))]
+        self.region_area_assign = [set() for x in range(0, len(self.regions_list))]
         self.country_prov_assign = [[] for x in range(0, len(self.countries_list))]
         ################################################################################################################
         print("All lists created --- %s seconds ---" % (time.time() - start_time))
@@ -193,7 +252,10 @@ class Map():
         :return:
         """
         print("Starting Assignments --- %s seconds ---" % (time.time() - start_time))
-        for x in range(self.width):
+        for x in range(int(self.width)):
+            if x % 100 == 0:
+                print(f"idx = {x} --- {time.time() - start_time} seconds ---")
+
             land_prov_array_x = self.land_province_array[x]
             areas_array_x = self.area_array[x]
             regions_array_x = self.region_array[x]
@@ -222,40 +284,77 @@ class Map():
                 civilized_population_pixel = civilized_population_array_x[y]
                 tribal_population_pixel = tribal_population_array_x[y]
                 if prov_pixel in self.used_provs:
-                    self.create_prov_history(prov_pixel, culture_pixel, religion_pixel, terrain_pixel, trade_good_pixel, province_modifier_pixel, civilized_population_pixel, tribal_population_pixel)
-                    self.area_prov_assign[self.areas_list.index(area_pixel)].append(self.prov_list.index(prov_pixel) + 1)
+                    self.create_prov_history(prov_pixel)
                     self.used_provs.remove(prov_pixel)
+                elif x*y % PIXEL_CHECKER**2 == 0:
+                    self.expand_prov_history(prov_pixel, area_pixel, region_pixel, country_pixel, culture_pixel, religion_pixel, terrain_pixel, trade_good_pixel, province_modifier_pixel, civilized_population_pixel, tribal_population_pixel)
 
-                    if prov_pixel in self.country_provs_set:
-                        self.country_prov_assign[self.countries_list.index(country_pixel)].append(self.prov_list.index(prov_pixel) + 1)
-                        self.country_provs_set.remove(prov_pixel)
-                    else:
-                        pass
-                    if area_pixel in self.region_areas_set:
-                        self.region_area_assign[self.regions_list.index(region_pixel)].append(self.areas_list.index(area_pixel))
-                        self.region_areas_set.remove(area_pixel)
-                    else:
-                        pass
-
-                else:
-                    pass
+        print(f"Length of self.used_provs = {len(self.used_provs)}")
+        print("Consolidating Provinces --- %s seconds ---" % (time.time() - start_time))
+        self.consolidate_prov_history()
         print("Assignments Completed --- %s seconds ---" % (time.time() - start_time))
 
-    def create_prov_history(self, prov_pixel, cul_pix, rel_pix, ter_pix, trade_goods_pix, prov_mod_mix, civ_pop_pix, tribe_pop_pix):#, civ_pix, prov_rank_pix):
-        prov_index = self.prov_list.index(prov_pixel)
-        culture = self.get_culture(cul_pix)
-        religion = self.get_religion(rel_pix)
-        terrain = self.get_terrain(ter_pix)
-        trade_good = self.get_trade_good(trade_goods_pix)
-        province_modifier = self.get_province_modifiers(prov_mod_mix)
-        num_citizens, num_freemen, num_slaves, num_tribesmen = self.get_population(civ_pop_pix, tribe_pop_pix)
+    def expand_prov_history(self, prov_pixel, area_pixel, region_pixel, country_pixel, culture_pixel, religion_pixel, terrain_pixel, trade_good_pixel, province_modifier_pixel, civilized_population_pixel, tribal_population_pixel):
+        idx = self.prov_list.index(prov_pixel)
+        self.prov_obj[idx].add_all_pixels(prov_pixel, area_pixel, region_pixel, country_pixel,
+                                          self.hash_pixel(culture_pixel), self.hash_pixel(religion_pixel),
+                                          self.hash_pixel(terrain_pixel), self.hash_pixel(trade_good_pixel),
+                                          self.hash_pixel(province_modifier_pixel), civilized_population_pixel, tribal_population_pixel)
 
-        self.culture_list[prov_index] = culture
-        self.religion_list[prov_index] = religion
-        self.terrain_list[prov_index] = terrain
-        self.trade_good_list[prov_index] = trade_good
-        self.province_modifier_list[prov_index] = province_modifier
-        self.province_population_list[prov_index] = (num_citizens, num_freemen, num_slaves, num_tribesmen)
+
+    def create_prov_history(self, prov_pixel):
+
+        idx = self.prov_list.index(prov_pixel)
+        self.prov_obj[idx] = Province(prov_pixel)
+
+
+
+    def consolidate_prov_history(self):
+        for province in self.prov_obj:
+            idx = self.prov_obj.index(province)
+            if idx % 100 == 0:
+                print(f"idx = {idx} --- {time.time() - start_time} seconds ---")
+            try:
+                area_pix = Counter(province.area).most_common()[0][0]
+                region_pix = Counter(province.region).most_common()[0][0]
+                country_pix = Counter(province.country).most_common()[0][0]
+                culture_pix = Counter(province.culture).most_common()[0][0]
+                religion_pix = Counter(province.religion).most_common()[0][0]
+                terrain_pix = Counter(province.terrain).most_common()[0][0]
+                trade_good_pix = Counter(province.trade_good).most_common()[0][0]
+                province_modifier_pix = Counter(province.province_modifier).most_common()[0][0]
+                num_citizens_pix = Counter(province.num_citizens).most_common()[0][0]
+                num_freemen_pix = Counter(province.num_freemen).most_common()[0][0]
+                num_slaves_pix = Counter(province.num_slaves).most_common()[0][0]
+                num_tribesmen_pix = Counter(province.num_tribesmen).most_common()[0][0]
+            except:
+                print(f"Problem RGB = {self.unhash_pixel(province.rgb)}")
+
+
+
+            self.area_prov_assign[self.areas_list.index(area_pix)].append(idx + 1)
+
+            self.country_prov_assign[self.countries_list.index(country_pix)].append(idx + 1)
+            # if area_pix not in self.regions_list.index(region_pix):
+            self.region_area_assign[self.regions_list.index(region_pix)].add(self.areas_list.index(area_pix))
+
+
+            culture = self.get_culture(culture_pix)
+            religion = self.get_religion(religion_pix)
+            terrain = self.get_terrain(terrain_pix)
+            trade_good = self.get_trade_good(trade_good_pix)
+            province_modifier = self.get_province_modifiers(province_modifier_pix)
+            num_citizens, num_freemen, num_slaves, num_tribesmen = self.get_population((num_citizens_pix, num_freemen_pix, num_slaves_pix), num_tribesmen_pix)
+
+            self.culture_list[idx] = culture
+            self.religion_list[idx] = religion
+            self.terrain_list[idx] = terrain
+            self.trade_good_list[idx] = trade_good
+            self.province_modifier_list[idx] = province_modifier
+            self.province_population_list[idx] = (num_citizens, num_freemen, num_slaves, num_tribesmen)
+        for i in range(len(self.region_area_assign)):
+            self.region_area_assign[i] = list(self.region_area_assign[i])
+        x = 0
 
     def get_culture(self, culture_pixel):
         """
@@ -327,7 +426,7 @@ class Map():
         num_citizens = (civ_pop_pixel[0]-100)
         num_freemen = (civ_pop_pixel[1]-100)
         num_slaves = (civ_pop_pixel[2] - 100)
-        num_tribesmen = (tribal_pop_pixel[0] - 100)
+        num_tribesmen = (tribal_pop_pixel - 100)
         return num_citizens, num_freemen, num_slaves, num_tribesmen
 
     def write_files(self):
