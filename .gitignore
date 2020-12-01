@@ -3,8 +3,16 @@ archived_scripts/
 Output_Files/
 *.bmp
 *.xcf
+*.tif
+*.points
+*.xml
+src/Input_Files/16200 Backup/
+src/Input_Files/16384/
+src/Input_Files/CK3Debug/
 src/Input_Files/small/
 src/Input_Files/mu/
+src/Input_Files/old bmps/
 src/Input_Files/OldAtlantic/
+src/Input_Files/Terrain Masks/
 countries_example.png
 land_provinces_transition.png
