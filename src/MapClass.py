@@ -1,3 +1,4 @@
+import ast
 import os
 import time
 import multiprocessing
@@ -14,6 +15,7 @@ import xlrd
 from PIL import Image
 import pandas as pd
 from collections import Counter, defaultdict
+import glob
 
 import numpy.lib.recfunctions as nlr
 
@@ -21,16 +23,17 @@ import numpy.lib.recfunctions as nlr
 start_time = time.time()
 
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\mu\\"
-INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\small\\"
+# INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\small\\"
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\CK3Debug\\"
-# INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\"
+INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\"
 OUTPUT_FILES_DIR = os.getcwd() + "\\Output_Files\\"
 
 PIXEL_CHECKER = 1
 
 class Province():
-    def __init__(self, rgb):
+    def __init__(self, rgb, name):
         self.rgb = rgb
+        self.name = name
         self.county = []
         self.area = []
         self.region = []
@@ -110,6 +113,7 @@ class Map():
         self.gen_kingdoms = False
         self.gen_empires = False
         self.load_excel_province_assignments()
+        self.load_names()
         self.get_province_modifiers((88, 11, 17))
         self.get_country_params()  # Loads country parameters from an excel file and stores them in a list of lists
         self.initial_file_setup_ir()
@@ -119,9 +123,10 @@ class Map():
         self.height = len(self.land_province_array[0])  # Height dimension of the map
         self.create_sets()  # Creates sets of all province arrays
         self.create_lists()  # Converts the appropriate sets to lists
+        self.generate_random_names()  # Generates random names for provinces, areas, and regions
         self.assign_provinces()  # Main loops that creates hierarchical relationships and province histories
 
-        self.generate_random_names()  # Generates random names for provinces, areas, and regions
+
         self.write_files()  # Writes all the files that are used in game
         print("Program Complete --- %s seconds ---" % (time.time() - start_time))
 
@@ -296,6 +301,21 @@ class Map():
         ################################################################################################################
         print("All lists created --- %s seconds ---" % (time.time() - start_time))
 
+    def load_names(self):
+        all_name_files = glob.glob(INPUT_FILES_DIR + "province_names\\" + "/*.csv")
+        list_of_name_files = []
+        for filename in all_name_files:
+            df = pd.read_csv(filename, index_col=None, header=0, converters={"RGB": ast.literal_eval})
+            list_of_name_files.append(df)
+        self.all_names_df = pd.concat(list_of_name_files, axis=0, ignore_index=True)
+        all_names_rgb_array = np.array(self.all_names_df["RGB"])
+        self.all_names_rgb_set = set()
+        for rgb in all_names_rgb_array:
+            self.all_names_rgb_set.add(rgb)
+        #     self.all_names_df.set_value()
+        x=0
+
+
     def assign_provinces(self):
         """
         The main loop where the magic happens
@@ -374,9 +394,15 @@ class Map():
 
 
     def create_prov_history(self, prov_pixel):
-
+        unhashed_prov_pixel = self.unhash_pixel(prov_pixel)
         idx = self.prov_list.index(prov_pixel)
-        self.prov_obj[idx] = Province(prov_pixel)
+        if unhashed_prov_pixel in self.all_names_rgb_set:
+            prov_name = (self.all_names_df.loc[self.all_names_df["RGB"]==unhashed_prov_pixel].iloc[0])["Name"]
+            print(f"Province with RGB {unhashed_prov_pixel} is called {prov_name}")
+        else:
+            prov_name = self.prov_names[idx]
+        self.prov_obj[idx] = Province(prov_pixel, prov_name)
+        self.prov_names[idx] = prov_name
 
 
 
@@ -654,10 +680,11 @@ class Map():
         x = 0
         for x in range(len(self.prov_list)):
             color = self.prov_list[x]
+            name = self.prov_obj[x].name
             ind = self.prov_list.index(color)
 
             out = "%d - " % (x + 1)
-            out += self.prov_names[self.prov_list.index(color)]
+            out += name
             out2 = self.prov_adj[self.prov_list.index(color)]
 
             local_file.write(' PROV{0}:0 "{1}"\n'.format(x + 1, out.split(" - ")[1]))
@@ -666,10 +693,10 @@ class Map():
             pixel = self.unhash_pixel(color)
 
             definitions.write("%d;%s;%s;%s;%s;x;;;;;;;;;;;;;;;;;;;\n" % (
-                x + 1, pixel[0], pixel[1], pixel[2], self.prov_names[self.prov_list.index(color)]))
+                x + 1, pixel[0], pixel[1], pixel[2], self.prov_obj[x].name))
 
             prov_setup.write(f"""
-    {x+1}={{ #{self.prov_names[ind]}
+    {x+1}={{ #{name}
         terrain="{self.terrain_list[ind]}"
         culture="{self.culture_list[ind]}"
         religion="{self.religion_list[ind]}"
@@ -834,6 +861,8 @@ class Map():
     def write_landed_titles_ck3(self):
         geo_regions_file = open(self.map_dir_ck3 + "geographical_region.txt", "w")
         landed_title_file = open(self.common_dir_ck3 + "00_landed_titles.txt", "w")
+        localisation_file = open(self.localisation_dir_ck3 + "cu_titles_l_english.yml", "w")
+        localisation_file.write("l_english:\n")
         landed_title_file.write("@correct_culture_primary_score = 100\n@better_than_the_alternatives_score = 50\n@always_primary_score = 1000\n\n#Empires\n\n\n")
 
         ar = 0
@@ -886,6 +915,7 @@ class Map():
                                                     f"province = {county}\n\n\t\t\t\t\t"
                                                     f"color = {{ {co_pix[0]} {co_pix[1]} {co_pix[2]} }}\n\t\t\t\t\tcolor2 = {{ 255 255 255 }}\n"
                                                     f"\n\t\t\t\t}}")
+                            localisation_file.write(f' b_{self.prov_names[county-1]}:0 "{self.prov_names[county-1]}"\n')
 
 
                             landed_title_file.write(f"\n\t\t\t}}")
