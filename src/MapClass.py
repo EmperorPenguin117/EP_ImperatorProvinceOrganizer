@@ -22,9 +22,9 @@ import numpy.lib.recfunctions as nlr
 
 start_time = time.time()
 
+# INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\CK3Debug\\"
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\mu\\"
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\small\\"
-# INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\CK3Debug\\"
 INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\"
 OUTPUT_FILES_DIR = os.getcwd() + "\\Output_Files\\"
 
@@ -33,7 +33,8 @@ PIXEL_CHECKER = 1
 class Province():
     def __init__(self, rgb, name):
         self.rgb = rgb
-        self.name = name
+        self.name = name.replace(' ', '_')
+        self.localisation_name = name
         self.county = []
         self.area = []
         self.region = []
@@ -110,8 +111,8 @@ class Province():
 
 class Map():
     def __init__(self):
-        self.gen_kingdoms = False
-        self.gen_empires = False
+        self.gen_kingdoms = True
+        self.gen_empires = True
         self.load_excel_province_assignments()
         self.load_names()
         self.get_province_modifiers((88, 11, 17))
@@ -313,6 +314,8 @@ class Map():
         for rgb in all_names_rgb_array:
             self.all_names_rgb_set.add(rgb)
         #     self.all_names_df.set_value()
+        self.all_names_df["CodeName"] = self.all_names_df["Name"].replace(' ', '_', regex=True)
+
         x=0
 
 
@@ -397,7 +400,7 @@ class Map():
         unhashed_prov_pixel = self.unhash_pixel(prov_pixel)
         idx = self.prov_list.index(prov_pixel)
         if unhashed_prov_pixel in self.all_names_rgb_set:
-            prov_name = (self.all_names_df.loc[self.all_names_df["RGB"]==unhashed_prov_pixel].iloc[0])["Name"]
+            prov_name = (self.all_names_df.loc[self.all_names_df["RGB"]==unhashed_prov_pixel].iloc[0])["CodeName"]
             print(f"Province with RGB {unhashed_prov_pixel} is called {prov_name}")
         else:
             prov_name = self.prov_names[idx]
@@ -874,9 +877,10 @@ class Map():
             if self.superregion_region_assign[sre]:
                 sreg_pix = self.unhash_pixel(self.superregions_list[sre])
                 if self.gen_empires:
+                    empire_capital = self.prov_names[self.area_prov_assign[self.region_area_assign[self.superregion_region_assign[sre][0]][0]][0]-1]
                     landed_title_file.write(f"e_{self.superregion_names[sre]} = {{\n"
                                             f"\tcolor = {{ {sreg_pix[0]} {sreg_pix[1]} {sreg_pix[2]} }}\n\tcolor2 = {{ 255 255 255 }}\n\t"
-                                            f"capital = c_{self.prov_names[self.area_prov_assign[self.region_area_assign[self.superregion_region_assign[sre][0]][0]][0]]}\n\n"
+                                            f"capital = c_{empire_capital}\n\n"
                                             f"\tcan_create = {{\n\t\t\tNOT = {{\n\t\t\tfaith = {{\n\t\t\t\t"
                                             f"religion_tag = christianity_religion\n\t\t\t\t"
                                             f"has_doctrine = doctrine_spiritual_head\n\t\t\t}}\n\t\t}}\n\t}}"
@@ -891,8 +895,9 @@ class Map():
                 for region in (self.superregion_region_assign[sre]):
                     reg_pix = self.unhash_pixel(self.regions_list[region])
                     if self.gen_kingdoms:
+                        kingdom_capital = self.prov_names[self.area_prov_assign[self.region_area_assign[self.superregion_region_assign[sre][self.superregion_region_assign[sre].index(region)]][0]][0]-1]
                         landed_title_file.write(f"\n\n\tk_{self.region_names[region]} = {{\n\t\tcolor = {{ {reg_pix[0]} {reg_pix[1]} {reg_pix[2]} }}\n"
-                                                f"\n\t\tcapital = c_{self.prov_names[self.area_prov_assign[self.region_area_assign[self.superregion_region_assign[sre][self.superregion_region_assign[sre].index(region)]][0]][0]]}\n" # COULD BE PROBLEMATIC
+                                                f"\n\t\tcapital = c_{kingdom_capital}\n" # COULD BE PROBLEMATIC
                                                 f"\n\t\tcan_create = {{\n\t\t\tNOT = {{\n\t\t\t\tfaith = {{\n\t\t\t\t\t"
                                                 f"religion_tag = christianity_religion\n\t\t\t\t\t"
                                                 f"has_doctrine = doctrine_spiritual_head\n\t\t\t\t}}\n\t\t\t}}\n\t\t}}"
@@ -903,19 +908,21 @@ class Map():
                     ar = 0
                     for area in (self.region_area_assign[region]):
                         area_pix = self.unhash_pixel(self.areas_list[area])
+                        duchy_capital = self.prov_names[self.area_prov_assign[self.region_area_assign[self.superregion_region_assign[sre][self.superregion_region_assign[sre].index(region)]][ar]][0]-1]
                         landed_title_file.write(f"\n\n\t\td_{self.area_names[(area)]} = {{"
                                                 f"\n\t\t\tcolor = {{ {area_pix[0]} {area_pix[1]} {area_pix[2]} }}\n\t\t\tcolor2 = {{ 255 255 255 }}"
-                                                f"\n\n\t\t\tcapital = c_{self.prov_names[self.area_prov_assign[self.region_area_assign[self.superregion_region_assign[sre][self.superregion_region_assign[sre].index(region)]][ar]][0]]}")
+                                                f"\n\n\t\t\tcapital = c_{duchy_capital}")
                         co = 0
                         for county in self.area_prov_assign[area]:
                             co_pix = self.unhash_pixel(self.prov_list[county-1])
-                            landed_title_file.write(f"\n\n\t\t\tc_{self.prov_names[county-1]} = {{\n\t\t\t\t"
+                            county_name = self.prov_names[county-1]
+                            landed_title_file.write(f"\n\n\t\t\tc_{county_name} = {{\n\t\t\t\t"
                                                     f"color = {{ {co_pix[0]} {co_pix[1]} {co_pix[2]} }}\n\t\t\t\tcolor2 = {{ 255 255 255 }}\n"
-                                                    f"\n\t\t\t\tb_{self.prov_names[county-1]} = {{\n\t\t\t\t\t"
+                                                    f"\n\t\t\t\tb_{county_name} = {{\n\t\t\t\t\t"
                                                     f"province = {county}\n\n\t\t\t\t\t"
                                                     f"color = {{ {co_pix[0]} {co_pix[1]} {co_pix[2]} }}\n\t\t\t\t\tcolor2 = {{ 255 255 255 }}\n"
                                                     f"\n\t\t\t\t}}")
-                            localisation_file.write(f' b_{self.prov_names[county-1]}:0 "{self.prov_names[county-1]}"\n')
+                            localisation_file.write(f' b_{self.prov_names[county-1]}:0 "{self.prov_names[county-1].replace("_", " ")}"\n')
 
 
                             landed_title_file.write(f"\n\t\t\t}}")
@@ -1159,7 +1166,7 @@ class Map():
                 #                           f'\n\t}}'
                 #                           f'\n}}\n')
                 self.title_history_file_ck3.write(f'c_{self.prov_names[idx]} = {{'
-                                                  f'\n\t980.1.1 = {{'
+                                                  f'\n\t1400.1.1 = {{'
                                                   f'\n\t\tholder = {holder}'
                                                   # f'\n\t\tliege = "d_{self.area_names[self.area_prov_assign.index(area)]}"'
                                                   f'\n\t}}'
