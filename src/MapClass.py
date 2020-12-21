@@ -8,13 +8,15 @@ from PIL import Image
 import pandas as pd
 from collections import Counter
 import glob
+import openpyxl
+
 
 start_time = time.time()
 
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\CK3Debug\\"
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\mu\\"
-# INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\small\\"
-INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\"
+INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\small\\"
+# INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\"
 OUTPUT_FILES_DIR = os.getcwd() + "\\Output_Files\\"
 
 PIXEL_CHECKER = 1
@@ -453,18 +455,18 @@ class Map():
 
     def load_excel_province_assignments(self):
         cultures_file_location = (INPUT_FILES_DIR + "cultures.xlsx")
-        self.cultures_df = pd.read_excel(cultures_file_location)
+        self.cultures_df = pd.read_excel(cultures_file_location, engine="openpyxl")
         religions_file_location = (INPUT_FILES_DIR + "religions.xlsx")
-        self.religions_df = pd.read_excel(religions_file_location)
+        self.religions_df = pd.read_excel(religions_file_location, engine="openpyxl")
         terrains_file_location = (INPUT_FILES_DIR + "terrains.xlsx")
-        self.terrains_df = pd.read_excel(terrains_file_location)
+        self.terrains_df = pd.read_excel(terrains_file_location, engine="openpyxl")
         trade_goods_file_location = (INPUT_FILES_DIR + "trade_goods.xlsx")
-        self.trade_goods_df = pd.read_excel(trade_goods_file_location)
+        self.trade_goods_df = pd.read_excel(trade_goods_file_location, engine="openpyxl")
         province_modifiers_file_location = (INPUT_FILES_DIR + "province_modifiers.xlsx")
-        self.province_modifiers_df = pd.read_excel(province_modifiers_file_location)
+        self.province_modifiers_df = pd.read_excel(province_modifiers_file_location, engine="openpyxl")
 
         characters_file_location = (INPUT_FILES_DIR + "characters.xlsx")
-        self.characters_df = pd.read_excel(characters_file_location)
+        self.characters_df = pd.read_excel(characters_file_location, engine="openpyxl")
 
     def get_culture(self, culture_pixel):
 
