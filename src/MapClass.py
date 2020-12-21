@@ -15,8 +15,8 @@ start_time = time.time()
 
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\CK3Debug\\"
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\mu\\"
-INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\small\\"
-# INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\"
+# INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\small\\"
+INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\"
 OUTPUT_FILES_DIR = os.getcwd() + "\\Output_Files\\"
 
 PIXEL_CHECKER = 1
