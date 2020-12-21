@@ -1,24 +1,13 @@
 import ast
 import os
-import time
-import multiprocessing
-import numpy as np
-import sys
-import pstats
-import io
-import cProfile
-
 import random
 import time
 import numpy as np
 import xlrd
 from PIL import Image
 import pandas as pd
-from collections import Counter, defaultdict
+from collections import Counter
 import glob
-
-import numpy.lib.recfunctions as nlr
-
 
 start_time = time.time()
 
