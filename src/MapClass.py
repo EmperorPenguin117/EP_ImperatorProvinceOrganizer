@@ -108,7 +108,7 @@ class Map():
         self.load_names()
         self.get_province_modifiers((88, 11, 17))
         # self.get_country_params()  # Loads country parameters from an excel file and stores them in a list of lists
-        self.initial_file_setup_ir()
+        # self.initial_file_setup_ir()
         self.initial_file_setup_ck3()
         self.load_images()  # Loading in all images used to create game files
         self.width = len(self.land_province_array)  # Width dimension of the map
@@ -551,13 +551,13 @@ class Map():
         return num_citizens, num_freemen, num_slaves, num_tribesmen
 
     def write_files(self):
-        self.write_province_files_ir()
+        # self.write_province_files_ir()
         self.write_province_files_ck3()
         self.write_landed_titles_ck3()
         self.write_province_history_files_ck3()
         self.write_characters_and_owners_ck3()
-        self.write_area_file()
-        self.write_region_file()
+        # self.write_area_file()
+        # self.write_region_file()
         # self.write_country_files()# XLRD DEPRECATED
 
     def get_country_params(self): # XLRD DEPRECATED
