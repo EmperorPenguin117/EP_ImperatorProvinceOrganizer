@@ -154,7 +154,7 @@ class Map():
         """
 
         try:
-            os.mkdir(path)
+            os.makedirs(path)
         except OSError:
             print("Creation of the directory %s failed" % path)
             return path
