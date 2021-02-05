@@ -9,6 +9,7 @@ import pandas as pd
 from collections import Counter
 import glob
 import openpyxl
+import codecs
 
 
 start_time = time.time()
@@ -16,7 +17,9 @@ start_time = time.time()
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\CK3Debug\\"
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\mu\\"
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\small\\"
-INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\"
+# INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\IngameSmall\\"
+INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\GEMUpdate\\"
+# INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\"
 OUTPUT_FILES_DIR = os.getcwd() + "\\Output_Files\\"
 
 PIXEL_CHECKER = 1
@@ -105,7 +108,7 @@ class Map():
         self.gen_kingdoms = True
         self.gen_empires = True
         self.load_excel_province_assignments()
-        self.load_names()
+        self.load_all_names()
         self.get_province_modifiers((88, 11, 17))
         # self.get_country_params()  # Loads country parameters from an excel file and stores them in a list of lists
         # self.initial_file_setup_ir()
@@ -116,6 +119,7 @@ class Map():
         self.create_sets()  # Creates sets of all province arrays
         self.create_lists()  # Converts the appropriate sets to lists
         self.generate_random_names()  # Generates random names for provinces, areas, and regions
+        self.reconcile_all_names()
         self.assign_provinces()  # Main loops that creates hierarchical relationships and province histories
 
 
@@ -274,7 +278,10 @@ class Map():
         self.river_prov_list = list(self.river_prov_set)
         self.countries_list = list(self.countries_set)
 
-        self.characters_list = [""] * len(self.land_provs_set)
+        self.prov_characters_list = [""] * len(self.land_provs_set)
+        self.area_characters_list = [""] * len(self.areas_set)
+        self.region_characters_list = [""] * len(self.regions_set)
+        self.superregion_characters_list = [""] * len(self.superregions_set)
 
         self.culture_list = [""] * len(self.land_provs_set)
         self.religion_list = [""] * len(self.land_provs_set)
@@ -293,22 +300,28 @@ class Map():
         ################################################################################################################
         print("All lists created --- %s seconds ---" % (time.time() - start_time))
 
-    def load_names(self):
-        all_name_files = glob.glob(INPUT_FILES_DIR + "province_names\\" + "/*.csv")
+    def load_names(self, dir):
+        all_name_files = glob.glob(INPUT_FILES_DIR + dir + "\\" + "/*.xlsx")
         list_of_name_files = []
         for filename in all_name_files:
-            df = pd.read_csv(filename, index_col=None, header=0, converters={"RGB": ast.literal_eval})
+            df = pd.read_excel(filename)
             list_of_name_files.append(df)
-        self.all_names_df = pd.concat(list_of_name_files, axis=0, ignore_index=True)
-        all_names_rgb_array = np.array(self.all_names_df["RGB"])
-        self.all_names_rgb_set = set()
+        all_names_df = pd.concat(list_of_name_files, axis=0, ignore_index=True)
+        all_names_rgb_array = np.array(all_names_df["RGB"])
+        all_prov_names_rgb_set = set()
         for rgb in all_names_rgb_array:
-            self.all_names_rgb_set.add(rgb)
+            all_prov_names_rgb_set.add(rgb)
         #     self.all_names_df.set_value()
-        self.all_names_df["CodeName"] = self.all_names_df["Name"].replace(' ', '_', regex=True)
+        all_names_df["code_name"] = all_names_df["code_name"].replace(' ', '_', regex=True)
+        return all_names_df, all_prov_names_rgb_set
 
+
+    def load_all_names(self):
+        self.all_prov_names_df, self.all_prov_names_rgb_set = self.load_names("province_names")
+        self.all_area_names_df, self.all_area_names_rgb_set = self.load_names("duchy_names")
+        self.all_region_names_df, self.all_region_names_rgb_set = self.load_names("kingdom_names")
+        self.all_superregion_names_df, self.all_superregion_names_rgb_set = self.load_names("empire_names")
         x=0
-
 
     def assign_provinces(self):
         """
@@ -388,15 +401,38 @@ class Map():
 
 
     def create_prov_history(self, prov_pixel):
-        unhashed_prov_pixel = self.unhash_pixel(prov_pixel)
+        unhashed_prov_pixel = str(self.unhash_pixel(prov_pixel))
         idx = self.prov_list.index(prov_pixel)
-        if unhashed_prov_pixel in self.all_names_rgb_set:
-            prov_name = (self.all_names_df.loc[self.all_names_df["RGB"]==unhashed_prov_pixel].iloc[0])["CodeName"]
-            print(f"Province with RGB {unhashed_prov_pixel} is called {prov_name}")
+        if unhashed_prov_pixel in self.all_prov_names_rgb_set:
+            prov_name = (self.all_prov_names_df.loc[self.all_prov_names_df["RGB"] == unhashed_prov_pixel].iloc[0])["code_name"]
+            # print(f"Province with RGB {unhashed_prov_pixel} is called {prov_name}")
         else:
             prov_name = self.prov_names[idx]
         self.prov_obj[idx] = Province(prov_pixel, prov_name)
+
         self.prov_names[idx] = prov_name
+
+    def reconcile_names(self, pixel, pixel_list, names_df, names_set, names_list):
+        unhashed_prov_pixel = str(self.unhash_pixel(pixel))
+
+        idx = pixel_list.index(pixel)
+        if unhashed_prov_pixel in names_set:
+            prov_name = (names_df.loc[names_df["RGB"] == unhashed_prov_pixel].iloc[0])["code_name"]
+            # print(f"Province with RGB {unhashed_prov_pixel} is called {prov_name}")
+        else:
+            prov_name = self.prov_names[idx]
+        names_list[idx] = prov_name
+        return names_list
+
+    def reconcile_all_names(self):
+        for area in self.areas_list:
+            self.reconcile_names(area, self.areas_list, self.all_area_names_df, self.all_area_names_rgb_set, self.area_names)
+        for region in self.regions_list:
+            self.reconcile_names(region, self.regions_list, self.all_region_names_df, self.all_region_names_rgb_set, self.region_names)
+        for superregion in self.superregions_list:
+            self.reconcile_names(superregion, self.superregions_list, self.all_superregion_names_df, self.all_superregion_names_rgb_set, self.superregion_names)
+
+        x = 0
 
 
 
@@ -411,7 +447,10 @@ class Map():
                 region_pix = Counter(province.region).most_common()[0][0]
                 superregion_pix = Counter(province.superregion).most_common()[0][0]
                 country_pix = Counter(province.country).most_common()[0][0]
-                character_pix = Counter(province.character).most_common()[0][0]
+                prov_character_pix = Counter(province.character).most_common()[0][0]
+
+
+
                 culture_pix = Counter(province.culture).most_common()[0][0]
                 religion_pix = Counter(province.religion).most_common()[0][0]
                 terrain_pix = Counter(province.terrain).most_common()[0][0]
@@ -433,7 +472,7 @@ class Map():
                 self.region_area_assign[self.regions_list.index((region_pix))].add(self.areas_list.index(area_pix))
                 self.superregion_region_assign[self.superregions_list.index((superregion_pix))].add(self.regions_list.index(region_pix))
 
-                character_id = self.get_character(self.unhash_pixel(character_pix))
+                character_id = self.get_character(self.unhash_pixel(prov_character_pix))
                 culture = self.get_culture((self.unhash_pixel(culture_pix)))
                 religion = self.get_religion((self.unhash_pixel(religion_pix)))
                 terrain = self.get_terrain((self.unhash_pixel(terrain_pix)))
@@ -441,7 +480,7 @@ class Map():
                 province_modifier = self.get_province_modifiers((self.unhash_pixel(province_modifier_pix)))
                 num_citizens, num_freemen, num_slaves, num_tribesmen = self.get_population((num_citizens_pix, num_freemen_pix, num_slaves_pix), num_tribesmen_pix)
 
-                self.characters_list[idx] = character_id
+                self.prov_characters_list[idx] = character_id
                 self.culture_list[idx] = culture
                 self.religion_list[idx] = religion
                 self.terrain_list[idx] = terrain
@@ -453,11 +492,20 @@ class Map():
         for superregion in self.superregion_region_assign:
             self.superregion_region_assign[self.superregion_region_assign.index(superregion)] = list(superregion)
 
+    def load_all_excel_files_in_folder(self, folder):
+        all_name_files = glob.glob(folder + "\\" + "/*.xlsx")
+        list_of_name_files = []
+        for filename in all_name_files:
+            df = pd.read_excel(filename)
+            list_of_name_files.append(df)
+        all_names_df = pd.concat(list_of_name_files, axis=0, ignore_index=True)
+        return all_names_df
+
     def load_excel_province_assignments(self):
-        cultures_file_location = (INPUT_FILES_DIR + "cultures.xlsx")
-        self.cultures_df = pd.read_excel(cultures_file_location, engine="openpyxl")
-        religions_file_location = (INPUT_FILES_DIR + "religions.xlsx")
-        self.religions_df = pd.read_excel(religions_file_location, engine="openpyxl")
+        cultures_folder_directory = (INPUT_FILES_DIR + "cultures" + "\\")
+        self.cultures_df = self.load_all_excel_files_in_folder(cultures_folder_directory)
+        religions_folder_directory = (INPUT_FILES_DIR + "religions" + "\\")
+        self.religions_df = self.load_all_excel_files_in_folder(religions_folder_directory)
         terrains_file_location = (INPUT_FILES_DIR + "terrains.xlsx")
         self.terrains_df = pd.read_excel(terrains_file_location, engine="openpyxl")
         trade_goods_file_location = (INPUT_FILES_DIR + "trade_goods.xlsx")
@@ -465,8 +513,8 @@ class Map():
         province_modifiers_file_location = (INPUT_FILES_DIR + "province_modifiers.xlsx")
         self.province_modifiers_df = pd.read_excel(province_modifiers_file_location, engine="openpyxl")
 
-        characters_file_location = (INPUT_FILES_DIR + "characters.xlsx")
-        self.characters_df = pd.read_excel(characters_file_location, engine="openpyxl")
+        characters_folder_directory = (INPUT_FILES_DIR + "characters" + "\\")
+        self.characters_df = self.load_all_excel_files_in_folder(characters_folder_directory)
 
     def get_culture(self, culture_pixel):
 
@@ -528,7 +576,7 @@ class Map():
             char = self.characters_df['ID'][np.where(self.characters_df['RGB'] == str((char_pixel[0], char_pixel[1], char_pixel[2])))[0][0]]
             self.character_id_set.add(char)
         except:
-            char = "0"
+            char = "empty"
         return char
 
     def get_province_modifiers(self, pm_pixel):
@@ -587,8 +635,8 @@ class Map():
         self.area_names, self.area_adj = self.random_name_generator(len(self.area_prov_assign))
         self.region_names, self.region_adj = self.random_name_generator(len(self.region_area_assign))
         self.superregion_names, self.superregion_adj = self.random_name_generator(len(self.superregion_region_assign))
-        self.sea_prov_names, self.sea_adj = self.random_name_generator(len(self.sea_prov_list), sea=True)
-        self.river_prov_names, self.river_prov_adj = self.random_name_generator((len(self.river_prov_list)), river=True)
+        self.sea_prov_names, self.sea_adj = self.random_name_generator(len(self.sea_prov_list)*2, sea=True)
+        self.river_prov_names, self.river_prov_adj = self.random_name_generator((len(self.river_prov_list)*2), river=True)
         print("Random Names Generated --- %s seconds ---" % (time.time() - start_time))
 
     def random_name_generator(self, number_names, num_syllables=2, sea=False, river=False):
@@ -819,7 +867,7 @@ class Map():
             ind = self.sea_prov_list.index(seacolor)
 
             out = "%d - " % (x + 1)
-            out += self.sea_prov_names[self.sea_prov_list.index(seacolor)]
+            out += self.sea_prov_names[ind]
 
             local_file.write(' PROV{0}:0 "{1}"\n'.format(x + 1, out.split(" - ")[1]))
 
@@ -855,7 +903,8 @@ class Map():
     def write_landed_titles_ck3(self):
         geo_regions_file = open(self.map_dir_ck3 + "geographical_region.txt", "w")
         landed_title_file = open(self.common_dir_ck3 + "00_landed_titles.txt", "w")
-        localisation_file = open(self.localisation_dir_ck3 + "cu_titles_l_english.yml", "w")
+        localisation_file = open(self.localisation_dir_ck3 + "CKU_generated_titles_l_english.yml", "w", encoding="utf-8")
+        localisation_file.write('\ufeff')
         localisation_file.write("l_english:\n")
         landed_title_file.write("@correct_culture_primary_score = 100\n@better_than_the_alternatives_score = 50\n@always_primary_score = 1000\n\n#Empires\n\n\n")
 
@@ -883,6 +932,7 @@ class Map():
 
                 # landed_title_file.write("regions = {\n\t\t")
                 re = 0
+                localisation_file.write(f' e_{self.superregion_names[sre-1]}:0 "{self.superregion_names[sre-1].replace("_", " ")}"\n')
                 for region in (self.superregion_region_assign[sre]):
                     reg_pix = self.unhash_pixel(self.regions_list[region])
                     if self.gen_kingdoms:
@@ -897,6 +947,7 @@ class Map():
                                                 f"add = @correct_culture_primary_score\n\t\t\t}}\n\t\t}}")
 
                     ar = 0
+                    localisation_file.write(f' k_{self.region_names[region]}:0 "{self.region_names[region].replace("_", " ")}"\n')
                     for area in (self.region_area_assign[region]):
                         area_pix = self.unhash_pixel(self.areas_list[area])
                         duchy_capital = self.prov_names[self.area_prov_assign[self.region_area_assign[self.superregion_region_assign[sre][self.superregion_region_assign[sre].index(region)]][ar]][0]-1]
@@ -904,6 +955,7 @@ class Map():
                                                 f"\n\t\t\tcolor = {{ {area_pix[0]} {area_pix[1]} {area_pix[2]} }}\n\t\t\tcolor2 = {{ 255 255 255 }}"
                                                 f"\n\n\t\t\tcapital = c_{duchy_capital}")
                         co = 0
+                        localisation_file.write(f' d_{self.area_names[area-1]}:0 "{self.area_names[area-1].replace("_", " ")}"\n')
                         for county in self.area_prov_assign[area]:
                             co_pix = self.unhash_pixel(self.prov_list[county-1])
                             county_name = self.prov_names[county-1]
@@ -913,7 +965,8 @@ class Map():
                                                     f"province = {county}\n\n\t\t\t\t\t"
                                                     f"color = {{ {co_pix[0]} {co_pix[1]} {co_pix[2]} }}\n\t\t\t\t\tcolor2 = {{ 255 255 255 }}\n"
                                                     f"\n\t\t\t\t}}")
-                            localisation_file.write(f' b_{self.prov_names[county-1]}:0 "{self.prov_names[county-1].replace("_", " ")}"\n')
+                            localisation_file.write(f' c_{self.prov_names[county-1]}:0 "{self.prov_names[county-1].replace("_", " ")}"\n'
+                                                    f' b_{self.prov_names[county-1]}:0 "{self.prov_names[county-1].replace("_", " ")}"\n')
 
 
                             landed_title_file.write(f"\n\t\t\t}}")
@@ -936,6 +989,46 @@ class Map():
         self.character_file = open(self.history_dir_ck3 + "gem_test_characters.txt", "w")
         self.title_history_file_ck3 = open(self.history_dir_ck3 + "gem_test_holdings.txt", "w")
         self.dynasty_file_ck3 = open(self.common_dir_ck3 + "gem_dynasties.txt", "w")
+        for emp_idx,empire in enumerate(self.all_superregion_names_df.values):
+            empire_owner_id = self.all_superregion_names_df.iloc[emp_idx]["owner_id"]
+            if not pd.isna(empire_owner_id):
+                self.title_history_file_ck3.write(f'e_{np.array(self.all_superregion_names_df["code_name"])[emp_idx]} = {{'
+                                                  f'\n\t1443.1.1 = {{'
+                                                  f'\n\t\tholder = {empire_owner_id}'
+                                                  f'\n\t}}'
+                                                  f'\n}}\n')
+        for king_idx,kingdom in enumerate(self.all_region_names_df.values):
+            kingdom_owner_id = self.all_region_names_df.iloc[king_idx]["owner_id"]
+            if not pd.isna(kingdom_owner_id):
+                self.title_history_file_ck3.write(f'k_{np.array(self.all_region_names_df["code_name"])[king_idx]} = {{'
+                                                      f'\n\t1443.1.1 = {{'
+                                                      f'\n\t\tholder = {kingdom_owner_id}')
+                if not pd.isna(np.array(((self.characters_df.loc[self.characters_df["ID"] == kingdom_owner_id])["Liege Title"])))\
+                        and kingdom_owner_id in list(self.characters_df["ID"].astype(str)): # Checking if the kingdom has an owner
+                    self.title_history_file_ck3.write(
+                                                      f'\n\t\tliege = {np.array(((self.characters_df.loc[self.characters_df["ID"] == kingdom_owner_id])["Liege Title"]))[0]}'
+                                                      f'\n\t}}'
+                                                      f'\n}}\n')
+                else:
+                    self.title_history_file_ck3.write(
+                                                      f'\n\t}}'
+                                                      f'\n}}\n')
+        for duc_idx,duchy in enumerate(self.all_area_names_df.values):
+            duchy_owner_id = self.all_area_names_df.iloc[duc_idx]["owner_id"]
+            if not pd.isna(duchy_owner_id):
+                self.title_history_file_ck3.write(f'd_{np.array(self.all_area_names_df["code_name"])[duc_idx]} = {{'
+                                                      f'\n\t1443.1.1 = {{'
+                                                      f'\n\t\tholder = {duchy_owner_id}')
+                if not pd.isna(np.array(((self.characters_df.loc[self.characters_df["ID"] == duchy_owner_id])["Liege Title"])))\
+                        and duchy_owner_id in list(self.characters_df["ID"].astype(str)):
+                    self.title_history_file_ck3.write(
+                                                      f'\n\t\tliege = {np.array(((self.characters_df.loc[self.characters_df["ID"] == duchy_owner_id])["Liege Title"]))[0]}'
+                                                      f'\n\t}}'
+                                                      f'\n}}\n')
+                else:
+                    self.title_history_file_ck3.write(
+                                                      f'\n\t}}'
+                                                      f'\n}}\n')
         for i1, area in enumerate(self.area_prov_assign):
             # dynasty = 5000000+i1
             # self.character_file.write(f'{i1+10000} = {{'
@@ -953,182 +1046,184 @@ class Map():
             #                             f'\n}}')
             for i2, province in enumerate(area):
                 idx = province - 1
-                if self.characters_list[idx] != "0" and self.characters_list[idx] not in self.char_written_checker:
-                    self.char_written_checker.add(self.characters_list[idx])
-                    char_id = self.characters_df['ID'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_liege_RGB = self.characters_df['Liege RGB'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    if not pd.isna(char_liege_RGB):
-                        char_liege_id = self.characters_df['ID'][np.where(self.characters_df['RGB'] == char_liege_RGB)[0][0]]
-                    char_name = self.characters_df['name'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_birthdate = self.characters_df['birth date'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_deathdate = self.characters_df['death date'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_female = self.characters_df['female'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_martial = self.characters_df['martial'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_prowess = self.characters_df['prowess'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_diplomacy = self.characters_df['diplomacy'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_intrigue = self.characters_df['intrigue'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_stewardship = self.characters_df['stewardship'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_learning = self.characters_df['learning'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_father = self.characters_df['father'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_mother = self.characters_df['mother'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_disallow_rand_traits = self.characters_df['disallow_random_traits'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_faith = self.characters_df['faith'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_culture = self.characters_df['culture'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_dynasty = self.characters_df['dynasty'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_dynasty_house = self.characters_df['dynasty_house'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_nickname = self.characters_df['give_nickname'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_sexuality = self.characters_df['sexuality'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_health = self.characters_df['health'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_fertility = self.characters_df['fertility'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait1 = self.characters_df['trait1'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait2 = self.characters_df['trait2'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait3 = self.characters_df['trait3'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait4 = self.characters_df['trait4'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait5 = self.characters_df['trait5'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait6 = self.characters_df['trait6'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait7 = self.characters_df['trait7'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait8 = self.characters_df['trait8'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait9 = self.characters_df['trait9'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait10 = self.characters_df['trait10'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait11 = self.characters_df['trait11'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait12 = self.characters_df['trait12'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait13 = self.characters_df['trait13'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait14 = self.characters_df['trait14'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait15 = self.characters_df['trait15'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait16 = self.characters_df['trait16'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait17 = self.characters_df['trait17'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait18 = self.characters_df['trait18'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait19 = self.characters_df['trait19'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait20 = self.characters_df['trait20'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait21 = self.characters_df['trait21'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait22 = self.characters_df['trait22'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait23 = self.characters_df['trait23'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait24 = self.characters_df['trait24'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait25 = self.characters_df['trait25'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait26 = self.characters_df['trait26'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait27 = self.characters_df['trait27'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait28 = self.characters_df['trait28'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait29 = self.characters_df['trait29'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
-                    char_trait30 = self.characters_df['trait30'][np.where(self.characters_df['ID'] == self.characters_list[idx])[0][0]]
+                if self.prov_characters_list[idx] != "0" and self.prov_characters_list[idx] not in self.char_written_checker:
+                    self.char_written_checker.add(self.prov_characters_list[idx])
+                    char_id = self.characters_df['ID'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_liege_title = self.characters_df['Liege Title'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    # if not pd.isna(char_liege_title):
+                    #     char_liege_id = self.characters_df['ID'][np.where(self.characters_df['RGB'] == char_liege_title)[0][0]]
+
+                    char_write = self.characters_df['write_to_file'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+
+                    char_name = self.characters_df['name'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_birthdate = self.characters_df['birth date'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_deathdate = self.characters_df['death date'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_female = self.characters_df['female'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_martial = self.characters_df['martial'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_prowess = self.characters_df['prowess'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_diplomacy = self.characters_df['diplomacy'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_intrigue = self.characters_df['intrigue'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_stewardship = self.characters_df['stewardship'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_learning = self.characters_df['learning'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_father = self.characters_df['father'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_mother = self.characters_df['mother'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_disallow_rand_traits = self.characters_df['disallow_random_traits'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_faith = self.characters_df['faith'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_culture = self.characters_df['culture'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_dynasty = self.characters_df['dynasty'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_dynasty_house = self.characters_df['dynasty_house'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_nickname = self.characters_df['give_nickname'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_sexuality = self.characters_df['sexuality'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_health = self.characters_df['health'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_fertility = self.characters_df['fertility'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait1 = self.characters_df['trait1'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait2 = self.characters_df['trait2'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait3 = self.characters_df['trait3'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait4 = self.characters_df['trait4'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait5 = self.characters_df['trait5'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait6 = self.characters_df['trait6'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait7 = self.characters_df['trait7'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait8 = self.characters_df['trait8'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait9 = self.characters_df['trait9'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait10 = self.characters_df['trait10'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait11 = self.characters_df['trait11'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait12 = self.characters_df['trait12'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait13 = self.characters_df['trait13'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait14 = self.characters_df['trait14'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait15 = self.characters_df['trait15'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait16 = self.characters_df['trait16'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait17 = self.characters_df['trait17'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait18 = self.characters_df['trait18'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait19 = self.characters_df['trait19'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait20 = self.characters_df['trait20'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait21 = self.characters_df['trait21'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait22 = self.characters_df['trait22'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait23 = self.characters_df['trait23'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait24 = self.characters_df['trait24'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait25 = self.characters_df['trait25'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait26 = self.characters_df['trait26'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait27 = self.characters_df['trait27'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait28 = self.characters_df['trait28'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait29 = self.characters_df['trait29'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+                    char_trait30 = self.characters_df['trait30'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+
+                    if char_write != "No" and char_write != "no" and char_write != "N" and char_write != "n":
+
+                        self.character_file.write(f'{char_id} = {{')
+                        if not pd.isna(char_name):
+                            self.character_file.write(f'\n\tname = "{char_name}"')
+                        if not pd.isna(char_dynasty_house):
+                            self.character_file.write(f'\n\tdynasty_house = {char_dynasty_house}')
+                        elif not pd.isna(char_dynasty):
+                            self.character_file.write(f'\n\tdynasty = {char_dynasty}')
+
+                        if not pd.isna(char_faith):
+                            self.character_file.write(f'\n\treligion = {char_faith}')
+                        if not pd.isna(char_culture):
+                            self.character_file.write(f'\n\tculture = {char_culture}')
+                        if not pd.isna(char_father):
+                            self.character_file.write(f'\n\tfather = {char_father}')
+                        if not pd.isna(char_mother):
+                            self.character_file.write(f'\n\tmother = {char_mother}')
+                        if not pd.isna(char_martial):
+                            self.character_file.write(f'\n\tmartial = {int(char_martial)}')
+                        if not pd.isna(char_diplomacy):
+                            self.character_file.write(f'\n\tdiplomacy = {int(char_diplomacy)}')
+                        if not pd.isna(char_intrigue):
+                            self.character_file.write(f'\n\tintrigue = {int(char_intrigue)}')
+                        if not pd.isna(char_stewardship):
+                            self.character_file.write(f'\n\tstewardship = {int(char_stewardship)}')
+                        if not pd.isna(char_learning):
+                            self.character_file.write(f'\n\tlearning = {int(char_learning)}')
+                        if not pd.isna(char_prowess):
+                            self.character_file.write(f'\n\tprowess = {int(char_prowess)}')
+                        if not pd.isna(char_female):
+                            self.character_file.write(f'\n\tfemale = {char_female}')
+
+                        if not pd.isna(char_nickname):
+                            self.character_file.write(f'\n\tgive_nickname = {char_name}')
+                        if not pd.isna(char_health):
+                            self.character_file.write(f'\n\thealth = {char_health}')
+                        if not pd.isna(char_sexuality):
+                            self.character_file.write(f'\n\tsexuality = {char_sexuality}')
+                        if not pd.isna(char_fertility):
+                            self.character_file.write(f'\n\tfertility = {char_fertility}')
+                        if not pd.isna(char_disallow_rand_traits):
+                            self.character_file.write(f'\n\tdisallow_random_traits = {char_disallow_rand_traits}')
+
+                        if not pd.isna(char_trait1):
+                            self.character_file.write(f'\n\ttrait = {char_trait1}')
+                        if not pd.isna(char_trait2):
+                            self.character_file.write(f'\n\ttrait = {char_trait2}')
+                        if not pd.isna(char_trait3):
+                            self.character_file.write(f'\n\ttrait = {char_trait3}')
+                        if not pd.isna(char_trait4):
+                            self.character_file.write(f'\n\ttrait = {char_trait4}')
+                        if not pd.isna(char_trait5):
+                            self.character_file.write(f'\n\ttrait = {char_trait5}')
+                        if not pd.isna(char_trait6):
+                            self.character_file.write(f'\n\ttrait = {char_trait6}')
+                        if not pd.isna(char_trait7):
+                            self.character_file.write(f'\n\ttrait = {char_trait7}')
+                        if not pd.isna(char_trait8):
+                            self.character_file.write(f'\n\ttrait = {char_trait8}')
+                        if not pd.isna(char_trait9):
+                            self.character_file.write(f'\n\ttrait = {char_trait9}')
+                        if not pd.isna(char_trait10):
+                            self.character_file.write(f'\n\ttrait = {char_trait10}')
+                        if not pd.isna(char_trait11):
+                            self.character_file.write(f'\n\ttrait = {char_trait11}')
+                        if not pd.isna(char_trait12):
+                            self.character_file.write(f'\n\ttrait = {char_trait12}')
+                        if not pd.isna(char_trait13):
+                            self.character_file.write(f'\n\ttrait = {char_trait13}')
+                        if not pd.isna(char_trait14):
+                            self.character_file.write(f'\n\ttrait = {char_trait14}')
+                        if not pd.isna(char_trait15):
+                            self.character_file.write(f'\n\ttrait = {char_trait15}')
+                        if not pd.isna(char_trait16):
+                            self.character_file.write(f'\n\ttrait = {char_trait16}')
+                        if not pd.isna(char_trait17):
+                            self.character_file.write(f'\n\ttrait = {char_trait17}')
+                        if not pd.isna(char_trait18):
+                            self.character_file.write(f'\n\ttrait = {char_trait18}')
+                        if not pd.isna(char_trait19):
+                            self.character_file.write(f'\n\ttrait = {char_trait19}')
+                        if not pd.isna(char_trait20):
+                            self.character_file.write(f'\n\ttrait = {char_trait20}')
+                        if not pd.isna(char_trait21):
+                            self.character_file.write(f'\n\ttrait = {char_trait21}')
+                        if not pd.isna(char_trait22):
+                            self.character_file.write(f'\n\ttrait = {char_trait22}')
+                        if not pd.isna(char_trait23):
+                            self.character_file.write(f'\n\ttrait = {char_trait23}')
+                        if not pd.isna(char_trait24):
+                            self.character_file.write(f'\n\ttrait = {char_trait24}')
+                        if not pd.isna(char_trait25):
+                            self.character_file.write(f'\n\ttrait = {char_trait25}')
+                        if not pd.isna(char_trait26):
+                            self.character_file.write(f'\n\ttrait = {char_trait26}')
+                        if not pd.isna(char_trait27):
+                            self.character_file.write(f'\n\ttrait = {char_trait27}')
+                        if not pd.isna(char_trait28):
+                            self.character_file.write(f'\n\ttrait = {char_trait28}')
+                        if not pd.isna(char_trait29):
+                            self.character_file.write(f'\n\ttrait = {char_trait29}')
+                        if not pd.isna(char_trait30):
+                            self.character_file.write(f'\n\ttrait = {char_trait30}')
 
 
-
-
-                    self.character_file.write(f'{char_id} = {{')
-                    if not pd.isna(char_name):
-                        self.character_file.write(f'\n\tname = "{char_name}"')
-                    if not pd.isna(char_dynasty_house):
-                        self.character_file.write(f'\n\tdynasty_house = {char_dynasty_house}')
-                    elif not pd.isna(char_dynasty):
-                        self.character_file.write(f'\n\tdynasty = {char_dynasty}')
-
-                    if not pd.isna(char_faith):
-                        self.character_file.write(f'\n\treligion = {char_faith}')
-                    if not pd.isna(char_culture):
-                        self.character_file.write(f'\n\tculture = {char_culture}')
-                    if not pd.isna(char_father):
-                        self.character_file.write(f'\n\tfather = {char_father}')
-                    if not pd.isna(char_mother):
-                        self.character_file.write(f'\n\tmother = {char_mother}')
-                    if not pd.isna(char_martial):
-                        self.character_file.write(f'\n\tmartial = {char_martial}')
-                    if not pd.isna(char_diplomacy):
-                        self.character_file.write(f'\n\tdiplomacy = {char_diplomacy}')
-                    if not pd.isna(char_intrigue):
-                        self.character_file.write(f'\n\tintrigue = {char_intrigue}')
-                    if not pd.isna(char_stewardship):
-                        self.character_file.write(f'\n\tstewardship = {char_stewardship}')
-                    if not pd.isna(char_learning):
-                        self.character_file.write(f'\n\tlearning = {char_learning}')
-                    if not pd.isna(char_prowess):
-                        self.character_file.write(f'\n\tprowess = {char_prowess}')
-                    if not pd.isna(char_female):
-                        self.character_file.write(f'\n\tfemale = {char_female}')
-
-                    if not pd.isna(char_nickname):
-                        self.character_file.write(f'\n\tgive_nickname = {char_name}')
-                    if not pd.isna(char_health):
-                        self.character_file.write(f'\n\thealth = {char_health}')
-                    if not pd.isna(char_sexuality):
-                        self.character_file.write(f'\n\tsexuality = {char_sexuality}')
-                    if not pd.isna(char_fertility):
-                        self.character_file.write(f'\n\tfertility = {char_fertility}')
-                    if not pd.isna(char_disallow_rand_traits):
-                        self.character_file.write(f'\n\tdisallow_random_traits = {char_disallow_rand_traits}')
-
-                    if not pd.isna(char_trait1):
-                        self.character_file.write(f'\n\ttrait = {char_trait1}')
-                    if not pd.isna(char_trait2):
-                        self.character_file.write(f'\n\ttrait = {char_trait2}')
-                    if not pd.isna(char_trait3):
-                        self.character_file.write(f'\n\ttrait = {char_trait3}')
-                    if not pd.isna(char_trait4):
-                        self.character_file.write(f'\n\ttrait = {char_trait4}')
-                    if not pd.isna(char_trait5):
-                        self.character_file.write(f'\n\ttrait = {char_trait5}')
-                    if not pd.isna(char_trait6):
-                        self.character_file.write(f'\n\ttrait = {char_trait6}')
-                    if not pd.isna(char_trait7):
-                        self.character_file.write(f'\n\ttrait = {char_trait7}')
-                    if not pd.isna(char_trait8):
-                        self.character_file.write(f'\n\ttrait = {char_trait8}')
-                    if not pd.isna(char_trait9):
-                        self.character_file.write(f'\n\ttrait = {char_trait9}')
-                    if not pd.isna(char_trait10):
-                        self.character_file.write(f'\n\ttrait = {char_trait10}')
-                    if not pd.isna(char_trait11):
-                        self.character_file.write(f'\n\ttrait = {char_trait11}')
-                    if not pd.isna(char_trait12):
-                        self.character_file.write(f'\n\ttrait = {char_trait12}')
-                    if not pd.isna(char_trait13):
-                        self.character_file.write(f'\n\ttrait = {char_trait13}')
-                    if not pd.isna(char_trait14):
-                        self.character_file.write(f'\n\ttrait = {char_trait14}')
-                    if not pd.isna(char_trait15):
-                        self.character_file.write(f'\n\ttrait = {char_trait15}')
-                    if not pd.isna(char_trait16):
-                        self.character_file.write(f'\n\ttrait = {char_trait16}')
-                    if not pd.isna(char_trait17):
-                        self.character_file.write(f'\n\ttrait = {char_trait17}')
-                    if not pd.isna(char_trait18):
-                        self.character_file.write(f'\n\ttrait = {char_trait18}')
-                    if not pd.isna(char_trait19):
-                        self.character_file.write(f'\n\ttrait = {char_trait19}')
-                    if not pd.isna(char_trait20):
-                        self.character_file.write(f'\n\ttrait = {char_trait20}')
-                    if not pd.isna(char_trait21):
-                        self.character_file.write(f'\n\ttrait = {char_trait21}')
-                    if not pd.isna(char_trait22):
-                        self.character_file.write(f'\n\ttrait = {char_trait22}')
-                    if not pd.isna(char_trait23):
-                        self.character_file.write(f'\n\ttrait = {char_trait23}')
-                    if not pd.isna(char_trait24):
-                        self.character_file.write(f'\n\ttrait = {char_trait24}')
-                    if not pd.isna(char_trait25):
-                        self.character_file.write(f'\n\ttrait = {char_trait25}')
-                    if not pd.isna(char_trait26):
-                        self.character_file.write(f'\n\ttrait = {char_trait26}')
-                    if not pd.isna(char_trait27):
-                        self.character_file.write(f'\n\ttrait = {char_trait27}')
-                    if not pd.isna(char_trait28):
-                        self.character_file.write(f'\n\ttrait = {char_trait28}')
-                    if not pd.isna(char_trait29):
-                        self.character_file.write(f'\n\ttrait = {char_trait29}')
-                    if not pd.isna(char_trait30):
-                        self.character_file.write(f'\n\ttrait = {char_trait30}')
-
-
-                    self.character_file.write(f'\n\t{char_birthdate} = {{'
-                                              f'\n\t\tbirth = "{char_birthdate}"'
-                                              f'\n\t}}'
-                                              f'\n\t{char_deathdate} = {{'
-                                              f'\n\t\tdeath = "{char_deathdate}"'
-                                              f'\n\t}}'
-                                              f'\n}}\n')
-                    print(f"Character Written = {char_name}")
+                        self.character_file.write(f'\n\t{char_birthdate} = {{'
+                                                  f'\n\t\tbirth = "{char_birthdate}"'
+                                                  f'\n\t}}'
+                                                  f'\n\t{char_deathdate} = {{'
+                                                  f'\n\t\tdeath = "{char_deathdate}"'
+                                                  f'\n\t}}'
+                                                  f'\n}}\n')
+                        print(f"Character Written = {char_name}")
                 # else:
                     # print("No Character Assigned")
-                holder = self.characters_list[idx]
+                holder = self.prov_characters_list[idx]
                 # if i2 == 0:
                 #     self.title_history_file_ck3.write(f'd_{self.area_names[self.area_prov_assign.index(area)]} = {{'
                 #                                       f'\n\t980.1.1 = {{'
@@ -1158,8 +1253,17 @@ class Map():
                 #                           f'\n}}\n')
                 self.title_history_file_ck3.write(f'c_{self.prov_names[idx]} = {{'
                                                   f'\n\t1400.1.1 = {{'
-                                                  f'\n\t\tholder = {holder}'
-                                                  # f'\n\t\tliege = "d_{self.area_names[self.area_prov_assign.index(area)]}"'
+                                                  f'\n\t\tholder = {holder}')
+                if not pd.isna(np.array(((self.characters_df.loc[self.characters_df["ID"] == holder])["Liege Title"]))):
+                    try:
+                        self.title_history_file_ck3.write(
+                                                  f'\n\t\tliege = "{np.array(((self.characters_df.loc[self.characters_df["ID"] == holder])["Liege Title"]))[0]}"'
+                                                  f'\n\t}}'
+                                                  f'\n}}\n')
+                    except:
+                        print(f"Could not write liege for {holder}")
+                else:
+                    self.title_history_file_ck3.write(
                                                   f'\n\t}}'
                                                   f'\n}}\n')
 
@@ -1168,7 +1272,14 @@ class Map():
     def write_province_history_files_ck3(self):
         prov_history_file = open(self.history_dir_ck3 + "gem_earth.txt", "w")
         for i in range(len(self.prov_list)):
-            prov_history_file.write(f"{i+1} = {{\t#{self.prov_names[i]}"
+            if len(self.culture_list[i]) == 0:
+                prov_history_file.write(f"{i+1} = {{\t#BLACK"
+                                    f"\n\tculture = test_culture"
+                                    f"\n\treligion = test_faith"
+                                    f"\n\tholding = tribal_holding"
+                                    f"\n}}\n")
+            else:
+                prov_history_file.write(f"{i+1} = {{\t#{self.prov_names[i]}"
                                     f"\n\tculture = {self.culture_list[i]}"
                                     f"\n\treligion = {self.religion_list[i]}"
                                     f"\n\tholding = tribal_holding"
