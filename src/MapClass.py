@@ -9,6 +9,8 @@ import pandas as pd
 from collections import Counter
 import glob
 import io
+import cProfile
+import pstats
 import openpyxl
 import codecs
 
@@ -18,9 +20,9 @@ start_time = time.time()
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\CK3Debug\\"
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\mu\\"
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\small\\"
-# INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\IngameSmall\\"
+INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\IngameSmall\\"
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\GEMUpdate\\"
-INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\"
+# INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\"
 OUTPUT_FILES_DIR = os.getcwd() + "\\Output_Files\\"
 
 PIXEL_CHECKER = 1
@@ -349,6 +351,15 @@ class Map():
                 print(f'Problem with name_idx = {name_idx}')
                 print(f'Problem with name {name}')
 
+    def assign_provinces2(self):
+        """
+        The vectorized main loop where the magic happens
+        :return:
+        """
+        seacheck = 0
+        impcheck = 0
+        print("Starting Assignments --- %s seconds ---" % (time.time() - start_time))
+
     def assign_provinces(self):
         """
         The main loop where the magic happens
@@ -509,7 +520,7 @@ class Map():
                 superregion_pix = Counter(province.superregion).most_common()[0][0]
                 country_pix = Counter(province.country).most_common()[0][0]
                 if country_pix == 0:
-                    country_pix = Counter(province.country).most_common()[1][0]
+                    country_pix = Counter(province.country).most_common()[0][1]
 
                 prov_character_pix = Counter(province.character).most_common()[0][0]
 
@@ -525,7 +536,7 @@ class Map():
                 num_tribesmen_pix = Counter(province.num_tribesmen).most_common()[0][0]
                 development_pix = Counter(province.development).most_common()[0][0]
             except:
-                print(f"Problem RGB")# = {self.unhash_pixel(province.rgb)}")
+                print(f"Problem RGB = {self.unhash_pixel(province.rgb)}")
 
 
             if province.rgb != self.impassable_pixel and province.rgb != self.sea_level_pixel:
@@ -628,7 +639,7 @@ class Map():
         try:
             ter = self.terrains_df['Terrain'][np.where(self.terrains_df['RGB'] == str((terrain_pixel[0], terrain_pixel[1], terrain_pixel[2])))[0][0]]
         except:
-            ter = "plains"
+            ter = "grassland"
         return ter
 
     def get_trade_good(self, trade_good_pixel):
@@ -1417,6 +1428,9 @@ class Map():
                     print(f'Problem with ID = {holder}\n'
                           f'{holder} Liege Title = {(self.characters_df.loc[self.characters_df["ID"] == holder])["Liege Title"]}'
                           f'self.characters_df.loc[self.characters_df["ID"] == holder] = {self.characters_df.loc[self.characters_df["ID"] == holder]}')
+                    self.title_history_file_ck3.write(
+                                                  f'\n\t}}'
+                                                  f'\n}}\n')
 
 
 
@@ -1425,16 +1439,21 @@ class Map():
         for i in range(len(self.prov_list)):
             if len(self.culture_list[i]) == 0:
                 prov_history_file.write(f"{i+1} = {{\t#BLACK"
-                                    f"\n\tculture = test_culture"
-                                    f"\n\treligion = test_faith"
-                                    f"\n\tholding = tribal_holding"
-                                    f"\n}}\n")
+                                        f"\n\t980.1.1 = {{"
+                                        f"\n\t\tculture = test_culture"
+                                        f"\n\t\treligion = test_faith"
+                                        f"\n\t\tholding = castle_holding"
+                                        f"\n\t}}"
+                                        f"\n}}\n")
             else:
                 prov_history_file.write(f"{i+1} = {{\t#{self.prov_names[i]}"
-                                    f"\n\tculture = {self.culture_list[i]}"
-                                    f"\n\treligion = {self.religion_list[i]}"
-                                    f"\n\tholding = tribal_holding"
-                                    f"\n}}\n")
+                                        f"\n\t980.1.1 = {{"
+                                        f"\n\t\tculture = {self.culture_list[i]}"
+                                        f"\n\t\treligion = {self.religion_list[i]}"
+                                        f"\n\t\tholding = castle_holding"
+                                        f"\n\t}}"
+                                        f"\n}}\n")
+
 
     def write_area_file(self):
         """
@@ -1572,12 +1591,9 @@ class Map():
     def write_terrain_file(self):
         self.terrain_dir = self.directory_setup(os.getcwd() + "\\Output_Files\\CK3\\common\\province_terrain\\")
         terrain_file = open(self.terrain_dir + "gem_province_terrain.txt", "w")
-        terrain_file.write("default=plains\n")
+        terrain_file.write("default=grassland\n")
         for idx, prov_terrain in enumerate(self.terrain_list):
             terrain_file.write(f"{idx+1}={prov_terrain}\n")
-        x=0
-
-
 
 
 def main():
