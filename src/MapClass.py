@@ -11,18 +11,20 @@ import glob
 import io
 import cProfile
 import pstats
+from numba import jit
 import openpyxl
 import codecs
 
 
 start_time = time.time()
+random.seed(1122)
 
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\CK3Debug\\"
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\mu\\"
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\small\\"
-INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\IngameSmall\\"
+# INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\IngameSmall\\"
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\GEMUpdate\\"
-# INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\"
+INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\"
 OUTPUT_FILES_DIR = os.getcwd() + "\\Output_Files\\"
 
 PIXEL_CHECKER = 1
@@ -221,6 +223,7 @@ class Map():
         self.culture_array = self.image_to_array("culture.png")
         self.religion_array = self.image_to_array("religion.png")
         self.terrain_array = self.image_to_array("terrain.png")
+        self.winter_array = self.image_to_array("winter.png")
         self.trade_good_array = self.image_to_array("trade_goods.png")
         self.province_modifier_array = self.image_to_array("province_modifiers.png")
 
@@ -299,6 +302,7 @@ class Map():
         self.culture_list = [""] * len(self.land_provs_set)
         self.religion_list = [""] * len(self.land_provs_set)
         self.terrain_list = [""] * len(self.land_provs_set)
+        self.winter_list = [""] * len(self.land_provs_set)
         self.trade_good_list = [""] * len(self.land_provs_set)
         self.province_modifier_list = [""] * len(self.land_provs_set)
         self.province_population_list = [(100,100,100,101)] * len(self.land_provs_set)
@@ -351,14 +355,62 @@ class Map():
                 print(f'Problem with name_idx = {name_idx}')
                 print(f'Problem with name {name}')
 
-    def assign_provinces2(self):
-        """
-        The vectorized main loop where the magic happens
-        :return:
-        """
-        seacheck = 0
-        impcheck = 0
-        print("Starting Assignments --- %s seconds ---" % (time.time() - start_time))
+    # def assign_provinces2(self):
+    #     """
+    #     The vectorized main loop where the magic happens
+    #     :return:
+    #     """
+    #     seacheck = 0
+    #     impcheck = 0
+    #     print("Starting Assignments --- %s seconds ---" % (time.time() - start_time))
+    #     flat_land_prov_array = self.land_province_array.flatten()
+    #     flat_areas_array = self.area_array.flatten()
+    #     flat_regions_array = self.region_array.flatten()
+    #     flat_superregion_array = self.superregion_array.flatten()
+    #     flat_countries_array = self.country_array.flatten()
+    #     flat_character_array = self.character_array.flatten()
+    #
+    #     flat_culture_array = self.culture_array.flatten()
+    #     flat_religion_array = self.religion_array.flatten()
+    #     flat_terrain_array = self.terrain_array.flatten()
+    #     flat_trade_good_array = self.trade_good_array.flatten()
+    #     flat_province_modifier_array = self.province_modifier_array.flatten()
+    #     flat_civilized_population_array = self.civilized_population_array.flatten()
+    #     flat_tribal_population_array = self.tribal_population_array.flatten()
+    #     flat_development_array = self.development_array.flatten()
+    #
+    #     zipped_info = np.array((list(zip(flat_land_prov_array, flat_areas_array, flat_regions_array, flat_superregion_array, flat_countries_array,
+    #       flat_character_array, flat_culture_array, flat_religion_array, flat_terrain_array, flat_trade_good_array,
+    #       flat_province_modifier_array, flat_civilized_population_array, flat_tribal_population_array, flat_development_array))))
+    #
+    #     for zip in np.nditer(zipped_info):
+    #         x=0
+    #
+    # def organize_pixels(self):
+    #     if prov_pixel == self.sea_level_pixel and seacheck == 0:
+    #         self.create_prov_history(prov_pixel)
+    #         self.used_provs.remove(prov_pixel)
+    #
+    #         seacheck = 1
+    #     if prov_pixel == self.impassable_pixel and impcheck == 0:
+    #         self.create_prov_history(prov_pixel)
+    #         self.used_provs.remove(prov_pixel)
+    #
+    #         impcheck = 1
+    #
+    #     if prov_pixel != self.sea_level_pixel and prov_pixel != self.impassable_pixel:
+    #         if prov_pixel in self.used_provs:
+    #             self.create_prov_history(prov_pixel)
+    #             self.used_provs.remove(prov_pixel)
+    #         elif x*y % PIXEL_CHECKER**2 == 0:
+    #             idx = self.prov_list.index(prov_pixel)
+    #             self.prov_obj[idx].add_all_pixels(prov_pixel, area_pixel, region_pixel, superregion_pixel, country_pixel,
+    #                                               character_pixel, (culture_pixel), (religion_pixel),
+    #                                               (terrain_pixel), (trade_good_pixel),
+    #                                               (province_modifier_pixel), self.unhash_pixel(civilized_population_pixel), self.unhash_pixel(tribal_population_pixel),
+    #                                               self.unhash_pixel(development_pixel))
+
+
 
     def assign_provinces(self):
         """
@@ -700,7 +752,7 @@ class Map():
         self.write_province_files_ir()
         self.write_area_file()
         self.write_region_file()
-        self.write_country_files()# XLRD DEPRECATED
+        # self.write_country_files()# XLRD DEPRECATED
         self.write_terrain_file()
 
     def get_country_params(self): # XLRD DEPRECATED
@@ -1600,14 +1652,14 @@ def main():
     world = Map()
 
 if __name__ == "__main__":
-    main()
-    # pr = cProfile.Profile()
-    # pr.enable()
-    # # cProfile.run('main()')
     # main()
-    # pr.disable()
-    # s = io.StringIO()
-    # sortby = 'tottime'
-    # ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-    # ps.print_stats()
-    # print(s.getvalue())
+    pr = cProfile.Profile()
+    pr.enable()
+    # cProfile.run('main()')
+    main()
+    pr.disable()
+    s = io.StringIO()
+    sortby = 'tottime'
+    ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+    ps.print_stats()
+    print(s.getvalue())
