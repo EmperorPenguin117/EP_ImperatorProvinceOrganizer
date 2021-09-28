@@ -11,6 +11,7 @@ import glob
 import io
 import cProfile
 import pstats
+import itertools
 from numba import jit
 import openpyxl
 import codecs
@@ -26,6 +27,8 @@ random.seed(1122)
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\GEMUpdate\\"
 INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\"
 OUTPUT_FILES_DIR = os.getcwd() + "\\Output_Files\\"
+
+IR_VANILLA_CONFIG_1 = True
 
 PIXEL_CHECKER = 1
 
@@ -292,7 +295,15 @@ class Map():
         self.superregions_list = list(self.superregions_set)
         self.sea_prov_list = list(self.sea_provs_set)
         self.river_prov_list = list(self.river_prov_set)
-        self.countries_list = list(self.countries_set)
+
+        unhashed_country_list = [self.unhash_pixel(country_pix) for country_pix in self.countries_set]
+        country_rgb_param_set = set(self.country_params_df['RGB'])
+        country_colors = []
+        for country_pixel_color in unhashed_country_list:
+            if str(country_pixel_color) in country_rgb_param_set:
+                country_colors.append(self.hash_pixel(country_pixel_color))
+        self.countries_list = country_colors
+
 
         self.prov_characters_list = [""] * len(self.land_provs_set)
         self.area_characters_list = [""] * len(self.areas_set)
@@ -562,6 +573,7 @@ class Map():
 
     def consolidate_prov_history(self):
         print("Consolidating Provinces --- %s seconds ---" % (time.time() - start_time))
+        unused_areas = self.areas_set
         for province in self.prov_obj:
             idx = self.prov_obj.index(province)
             if idx % 100 == 0:
@@ -600,12 +612,15 @@ class Map():
                 #     print(f'Problem Country Pixel Province: RGB = {province.rgb}, country_pix type = {type(country_pix)}')
                 try:
                     country_idx = self.countries_list.index((country_pix))
+                    self.country_prov_assign[country_idx].append(idx + 1)
                 except:
                     country_idx = 0
 
-                self.country_prov_assign[country_idx].append(idx + 1)
+
                 # if area_pix not in self.regions_list.index(region_pix):
-                self.region_area_assign[self.regions_list.index((region_pix))].add(self.areas_list.index(area_pix))
+                if area_pix in unused_areas:
+                    self.region_area_assign[self.regions_list.index((region_pix))].add(self.areas_list.index(area_pix))
+                    unused_areas.remove(area_pix)
                 self.superregion_region_assign[self.superregions_list.index((superregion_pix))].add(self.regions_list.index(region_pix))
 
                 character_id = self.get_character(self.unhash_pixel(prov_character_pix))
@@ -615,6 +630,17 @@ class Map():
                 trade_good = self.get_trade_good((self.unhash_pixel(trade_good_pix)))
                 province_modifier = self.get_province_modifiers((self.unhash_pixel(province_modifier_pix)))
                 num_citizens, num_freemen, num_slaves, num_tribesmen = self.get_population((num_citizens_pix, num_freemen_pix, num_slaves_pix), num_tribesmen_pix)
+
+                if IR_VANILLA_CONFIG_1:
+                    if country_idx != 0:
+                        params_idx = np.where(self.country_params_df["RGB"] == str(self.unhash_pixel(self.countries_list[country_idx])))[0][0]
+                        culture = self.country_params_df["primary_culture"][params_idx]
+                        religion = self.country_params_df["religion"][params_idx]
+                        num_citizens += 1
+                        num_freemen += 1
+                        num_slaves += 1
+                        num_tribesmen += 1
+
                 development = self.get_development(development_pix)
 
                 self.prov_characters_list[idx] = character_id
@@ -732,10 +758,10 @@ class Map():
         return pm
 
     def get_population(self, civ_pop_pixel, tribal_pop_pixel):
-        num_citizens = (civ_pop_pixel[0]-100)
-        num_freemen = (civ_pop_pixel[1]-100)
-        num_slaves = (civ_pop_pixel[2] - 100)
-        num_tribesmen = (tribal_pop_pixel - 100)
+        num_citizens = (civ_pop_pixel[0]-50)
+        num_freemen = (civ_pop_pixel[1]-50)
+        num_slaves = (civ_pop_pixel[2] - 50)
+        num_tribesmen = (tribal_pop_pixel - 50)
         return num_citizens, num_freemen, num_slaves, num_tribesmen
 
     def get_development(self, dev_pixel):
@@ -752,7 +778,7 @@ class Map():
         self.write_province_files_ir()
         self.write_area_file()
         self.write_region_file()
-        # self.write_country_files()# XLRD DEPRECATED
+        self.write_country_files()# XLRD DEPRECATED
         self.write_terrain_file()
 
     def get_country_params(self): # XLRD DEPRECATED
@@ -763,6 +789,7 @@ class Map():
 
         country_parameters_file_location = (INPUT_FILES_DIR + "country_parameters.xlsx")
         country_parameters_file = xlrd.open_workbook(country_parameters_file_location)
+        self.country_params_df = pd.read_excel(country_parameters_file)
         country_params = list(map(list, []))
         for s in country_parameters_file.sheets():
             for row in range(s.nrows):
@@ -864,7 +891,7 @@ class Map():
         # prov_list = prov_list[0].province_id
         # sea_prov_list = sea_prov_list[0].sea_province_id
         # river_prov_list = river_prov_list[0].river_province_id
-
+        owned_provs_list = list(itertools.chain(*self.country_prov_assign))
         local_file = io.open(self.localisation_dir + "provincenames_l_english.yml", "w", encoding="utf-8")
         local_file.write("l_english:\n")  # First line in any English localisation file
         local_file_adj = io.open(self.localisation_dir + "prov_names_adj_l_english.yml", "w", encoding="utf-8")
@@ -1117,7 +1144,7 @@ class Map():
                                                 f"\n\t\t\tcolor = {{ {area_pix[0]} {area_pix[1]} {area_pix[2]} }}\n\t\t\tcolor2 = {{ 255 255 255 }}"
                                                 f"\n\n\t\t\tcapital = c_{duchy_capital}")
                         co = 0
-                        localisation_file.write(f' d_{self.area_names[area-1]}:0 "{self.area_loc_names[area-1]}"\n')
+                        localisation_file.write(f' d_{self.area_names[area]}:0 "{self.area_loc_names[area]}"\n') #CHANGED
                         for county in self.area_prov_assign[area]:
                             co_pix = self.unhash_pixel(self.prov_list[county-1])
                             county_name = self.prov_names[county-1]
@@ -1577,13 +1604,13 @@ class Map():
 
         ct = 0
         name_col = self.country_params[:][0].index('Name')
-        folder_col = self.country_params[:][0].index('Folder')
+        folder_col = self.country_params[:][0].index('Region')
         adj_col = self.country_params[:][0].index('ADJ')
         tag_col = self.country_params[:][0].index('TAG')
         rgb_col = self.country_params[:][0].index('RGB')
-        gov_col = self.country_params[:][0].index('Government')
-        culture_col = self.country_params[:][0].index('Primary Culture')
-        religion_col = self.country_params[:][0].index('Religion')
+        gov_col = self.country_params[:][0].index('government')
+        culture_col = self.country_params[:][0].index('primary_culture')
+        religion_col = self.country_params[:][0].index('religion')
         capital_rgb_col = self.country_params[:][0].index('Capital RGB')
 
         country_file.write("\ncountry = {\n\tcountries = {")
@@ -1596,13 +1623,21 @@ class Map():
                     rgb_country = str(self.unhash_pixel(self.countries_list[ct]))
 
                     if rgb_country == rgb_cp:
+                        # if VANILLA_CONFIG_1:
+                        #     self.province_population_list[0]
+
+
                         country_file.write("\n\n\t\t{0} = {{ #{1}\n\t\t\t".format(self.country_params[i][tag_col],
                                                                                   self.country_params[i][name_col]))
                         country_file.write("\n\t\t\tgovernment = {0}".format(self.country_params[i][gov_col]))
                         country_file.write("\n\t\t\tprimary_culture = {0}".format(self.country_params[i][culture_col]))
                         country_file.write("\n\t\t\treligion = {0}".format(self.country_params[i][religion_col]))
                         hashed_capital_rgb = self.hash_pixel(tuple(map(int, self.country_params[i][capital_rgb_col].strip("(").strip(")").split(","))))
-                        capital_prov_num = np.where(self.prov_arr == hashed_capital_rgb)[0][0] + 1
+                        try:
+                            capital_prov_num = np.where(self.prov_arr == hashed_capital_rgb)[0][0] + 1
+                        except:
+                            capital_prov_num = 0
+                            print(f"Error Assigning Capital Province -- Capital RGB {self.unhash_pixel(hashed_capital_rgb)}")
                         if capital_prov_num in self.country_prov_assign[ct]:
                             country_file.write("\n\t\t\tcapital = {0}".format(capital_prov_num))
                         else:
@@ -1618,7 +1653,7 @@ class Map():
                             self.country_params[i][tag_col], self.country_params[i][name_col], self.country_params[i][tag_col],
                             self.country_params[i][adj_col]))
                         while ct2 < len(self.country_prov_assign[ct]):
-                            country_file.write("%d " % self.country_prov_assign[ct][ct2])
+                            country_file.write(f"{int(self.country_prov_assign[ct][ct2])} ")
                             ct2 += 1
                         country_file.write(" #%d\n\t\t\t}\n\t\t}" % len(self.country_prov_assign[ct]))
             ct += 1
@@ -1652,14 +1687,14 @@ def main():
     world = Map()
 
 if __name__ == "__main__":
-    # main()
-    pr = cProfile.Profile()
-    pr.enable()
-    # cProfile.run('main()')
     main()
-    pr.disable()
-    s = io.StringIO()
-    sortby = 'tottime'
-    ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-    ps.print_stats()
-    print(s.getvalue())
+    # pr = cProfile.Profile()
+    # pr.enable()
+    # # cProfile.run('main()')
+    # main()
+    # pr.disable()
+    # s = io.StringIO()
+    # sortby = 'tottime'
+    # ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+    # ps.print_stats()
+    # print(s.getvalue())
