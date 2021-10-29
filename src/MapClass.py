@@ -28,7 +28,7 @@ random.seed(1122)
 INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\"
 OUTPUT_FILES_DIR = os.getcwd() + "\\Output_Files\\"
 
-IR_VANILLA_CONFIG_1 = True
+IR_VANILLA_CONFIG_1 = False
 
 PIXEL_CHECKER = 1
 
@@ -346,6 +346,9 @@ class Map():
 
     def load_all_names(self):
         self.all_prov_names_df, self.all_prov_names_rgb_set = self.load_names("province_names")
+        for index, row in self.all_prov_names_df.iterrows():
+            if row['codename_county'] != row['codename_barony']:
+                print(f"Index = {index+2}, codename_county = {row['codename_county']}, codename_barony = {row['codename_barony']}")
         self.all_area_names_df, self.all_area_names_rgb_set = self.load_names("duchy_names")
         self.all_region_names_df, self.all_region_names_rgb_set = self.load_names("kingdom_names")
         self.all_superregion_names_df, self.all_superregion_names_rgb_set = self.load_names("empire_names")
@@ -715,7 +718,7 @@ class Map():
         """
 
         try:
-            ter = self.terrains_df['Terrain'][np.where(self.terrains_df['RGB'] == str((terrain_pixel[0], terrain_pixel[1], terrain_pixel[2])))[0][0]]
+            ter = self.terrains_df['code_terrain'][np.where(self.terrains_df['RGB'] == str((terrain_pixel[0], terrain_pixel[1], terrain_pixel[2])))[0][0]]
         except:
             ter = "grassland"
         return ter
