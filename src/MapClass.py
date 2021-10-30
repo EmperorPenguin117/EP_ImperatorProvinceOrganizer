@@ -23,9 +23,9 @@ random.seed(1122)
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\CK3Debug\\"
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\mu\\"
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\small\\"
-# INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\IngameSmall\\"
+INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\IngameSmall\\"
 # INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\GEMUpdate\\"
-INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\"
+# INPUT_FILES_DIR = os.getcwd() + "\\Input_Files\\"
 OUTPUT_FILES_DIR = os.getcwd() + "\\Output_Files\\"
 
 IR_VANILLA_CONFIG_1 = False
@@ -212,11 +212,19 @@ class Map():
         :return: map directory, localisation directory
         """
         self.out_dir_ck3 = self.directory_setup(os.getcwd() + "\\Output_Files\\CK3\\")
-        self.localisation_dir_ck3 = self.directory_setup(self.out_dir_ck3 + "localisation\\")
+        self.localisation_dir_ck3 = self.directory_setup(self.out_dir_ck3 + "localisation\\english\\")
         self.map_dir_ck3 = self.directory_setup(self.out_dir_ck3 + "map_data\\")
-        self.history_dir_ck3 = self.directory_setup(self.out_dir_ck3 + "history\\provinces\\")
+        self.history_dir_ck3 = self.directory_setup(self.out_dir_ck3 + "history\\")
+        self.directory_setup(self.out_dir_ck3 + "history\\provinces\\")
+        self.directory_setup(self.out_dir_ck3 + "history\\titles\\")
+        self.directory_setup(self.out_dir_ck3 + "history\\characters\\")
 
         self.common_dir_ck3 = self.directory_setup(self.out_dir_ck3 + "common\\")
+        self.directory_setup(self.out_dir_ck3 + "common\\landed_titles\\")
+        self.directory_setup(self.out_dir_ck3 + "common\\dynasties\\")
+
+        self.gfx_dir_ck3 = self.directory_setup(self.out_dir_ck3 + "gfx\\")
+        self.directory_setup(self.out_dir_ck3 + "gfx\\map\\map_object_data\\")
 
     def load_images(self):
         """
@@ -244,6 +252,7 @@ class Map():
 
         self.sea_province_array = self.image_to_array("sea_provinces.png")
         self.river_province_array = self.image_to_array("river_provinces.png")
+        self.crossings_array = self.image_to_array("crossings.png")
 
         print("All images loaded --- %s seconds ---" % (time.time() - start_time))
 
@@ -265,6 +274,7 @@ class Map():
         self.river_prov_set = set(self.river_province_array.flatten())
         self.characters_set = set(self.character_array.flatten())
         self.character_id_set = set()
+        self.crossings_set = set(self.crossings_array.flatten())
 
         # These sets are created for assigning provinces and areas.
         # When a province is assigned to an area, it is removed from self.used_provs so it can't be assigned again
@@ -295,6 +305,8 @@ class Map():
         self.superregions_list = list(self.superregions_set)
         self.sea_prov_list = list(self.sea_provs_set)
         self.river_prov_list = list(self.river_prov_set)
+        self.crossings_list = list(self.crossings_set)
+        self.crossings_coord_list = [[] for x in range(0, len(self.crossings_set))]
 
         unhashed_country_list = [self.unhash_pixel(country_pix) for country_pix in self.countries_set]
         country_rgb_param_set = set(self.country_params_df['RGB'])
@@ -326,6 +338,8 @@ class Map():
         self.superregion_region_assign = [set() for x in range(0, len(self.superregions_list))]
         self.country_prov_assign = [[] for x in range(0, len(self.countries_list))]
         ################################################################################################################
+
+
         print("All lists created --- %s seconds ---" % (time.time() - start_time))
 
     def load_names(self, dir):
@@ -444,6 +458,7 @@ class Map():
             superregion_array_x = self.superregion_array[x]
             countries_array_x = self.country_array[x]
             character_array_x = self.character_array[x]
+            crossings_array_x = self.crossings_array[x]
 
             culture_array_x = self.culture_array[x]
             religion_array_x = self.religion_array[x]
@@ -462,6 +477,7 @@ class Map():
                 superregion_pixel = superregion_array_x[y]
                 country_pixel = countries_array_x[y]
                 character_pixel = character_array_x[y]
+                crossings_pixel = crossings_array_x[y]
 
                 culture_pixel = culture_array_x[y]
                 religion_pixel = religion_array_x[y]
@@ -491,6 +507,11 @@ class Map():
                                                  character_pixel, culture_pixel, religion_pixel, terrain_pixel,
                                                  trade_good_pixel, province_modifier_pixel, civilized_population_pixel,
                                                  tribal_population_pixel, development_pixel)
+                    if crossings_pixel != self.sea_level_pixel and crossings_pixel != self.impassable_pixel:
+                        # Background land in crossings.png is same grey as impassable terrain
+                        # print("test")
+                        self.crossings_coord_list[self.crossings_list.index(crossings_pixel)].append((x, y))
+
 
         print(f"Length of self.used_provs = {len(self.used_provs)}")
 
@@ -783,6 +804,7 @@ class Map():
         self.write_region_file()
         self.write_country_files()# XLRD DEPRECATED
         self.write_terrain_file()
+        self.write_straights_file()
 
     def get_country_params(self): # XLRD DEPRECATED
         """
@@ -1023,10 +1045,7 @@ class Map():
         # sea_prov_list = sea_prov_list[0].sea_province_id
         # river_prov_list = river_prov_list[0].river_province_id
 
-        local_file = open(self.localisation_dir_ck3 + "provincenames_l_english.yml", "w", encoding="utf-8")
-        local_file.write("l_english:\n")  # First line in any English localisation file
-        local_file_adj = open(self.localisation_dir_ck3 + "prov_names_adj_l_english.yml", "w", encoding="utf-8")
-        local_file_adj.write("l_english:\n")
+
 
         definitions = open(self.map_dir_ck3 + "definition.csv", "w")
         definitions.write("0;0;0;0;x;x;\n")  # First line in any definitions file
@@ -1039,8 +1058,6 @@ class Map():
             out = "%d - " % (x + 1)
             out += self.prov_loc_names[self.prov_list.index(color)]
             out2 = self.prov_adj[self.prov_list.index(color)]
-            local_file.write(' PROV{0}:0 "{1}"\n'.format(x + 1, out.split(" - ")[1]))
-            local_file_adj.write(' PROV{0}:0 "{1}"\n'.format(x + 1, out2))
 
             pixel = self.unhash_pixel(color)
             col_ind = self.prov_list.index(color)
@@ -1061,8 +1078,6 @@ class Map():
             out = "%d - " % (x + 1)
             out += self.sea_prov_names[ind]
 
-            local_file.write(' PROV{0}:0 "{1}"\n'.format(x + 1, out.split(" - ")[1]))
-
             pixel = self.unhash_pixel(seacolor)
             definitions.write("%d;%s;%s;%s;%s;x;\n" % (
                 x + 1, pixel[0], pixel[1], pixel[2],
@@ -1078,7 +1093,6 @@ class Map():
             out = "%d - " % (x + 1)
             out += self.river_prov_names[ind]
 
-            local_file.write(' PROV{0}:0 "{1}"\n'.format(x + 1, out.split(" - ")[1]))
             pixel = self.unhash_pixel(rivercolor)
             definitions.write("%d;%s;%s;%s;%s;x;\n" % (
                 x + 1, pixel[0], pixel[1],pixel[2],
@@ -1094,7 +1108,7 @@ class Map():
 
     def write_landed_titles_ck3(self):
         geo_regions_file = open(self.map_dir_ck3 + "geographical_region.txt", "w")
-        landed_title_file = open(self.common_dir_ck3 + "00_landed_titles.txt", "w")
+        landed_title_file = open(self.common_dir_ck3 + "\\landed_titles\\" + "00_landed_titles.txt", "w")
         localisation_file = open(self.localisation_dir_ck3 + "CKU_generated_titles_l_english.yml", "w", encoding="utf-8")
         localisation_file.write('\ufeff')
         localisation_file.write("l_english:\n")
@@ -1181,9 +1195,9 @@ class Map():
 
     def write_characters_and_owners_ck3(self):
         self.char_written_checker = set()
-        self.character_file = open(self.history_dir_ck3 + "gem_test_characters.txt", "w")
-        self.title_history_file_ck3 = open(self.history_dir_ck3 + "gem_test_holdings.txt", "w")
-        self.dynasty_file_ck3 = open(self.common_dir_ck3 + "gem_dynasties.txt", "w")
+        self.character_file = open(self.history_dir_ck3 + "\\characters\\" + "gem_test_characters.txt", "w")
+        self.title_history_file_ck3 = open(self.history_dir_ck3 + "\\titles\\" + "gem_test_holdings.txt", "w")
+        self.dynasty_file_ck3 = open(self.common_dir_ck3 + "\\dynasties\\" + "gem_dynasties.txt", "w")
         for emp_idx,empire in enumerate(self.all_superregion_names_df.values):
             empire_owner_id = self.all_superregion_names_df.iloc[emp_idx]["owner_id"]
             if empire[1] in self.superregion_names:
@@ -1517,7 +1531,7 @@ class Map():
 
 
     def write_province_history_files_ck3(self):
-        prov_history_file = open(self.history_dir_ck3 + "gem_earth.txt", "w")
+        prov_history_file = open(self.history_dir_ck3 + "\\provinces\\" + "gem_earth.txt", "w")
         for i in range(len(self.prov_list)):
             if len(self.culture_list[i]) == 0:
                 prov_history_file.write(f"{i+1} = {{\t#BLACK"
@@ -1685,6 +1699,86 @@ class Map():
         for idx, prov_terrain in enumerate(self.terrain_list):
             terrain_file.write(f"{idx+1}={prov_terrain}\n")
 
+    def write_straights_file(self):
+        print("Writing Crossings")
+        crossings_file = open(self.map_dir_ck3 + "adjacencies.csv", "w")
+        crossings_file.write("From;To;Type;Through;start_x;start_y;stop_x;stop_y;Comment\n")  # First line in crossings file
+
+        bridges = 0
+        for idx, coords in enumerate(self.crossings_coord_list):
+            if len(coords) > 0:  # Test if array is empty (black or grey color)
+                print("test")
+                providx_1 = self.prov_list.index(f'{self.land_province_array[coords[0][0], coords[0][1]]}')
+                providx_2 = self.prov_list.index(f'{self.land_province_array[coords[1][0], coords[1][1]]}')
+                rgb = self.unhash_pixel(int(self.crossings_list[idx]))
+                r = rgb[0]
+                if r == 0:
+                    crossing_type = 'river_large'
+                    bridges += 1
+                else:
+                    crossing_type = 'sea'
+                waterx = int((coords[0][0] + coords[1][0])/2)
+                watery = int((coords[0][1] + coords[1][1])/2)
+                if crossing_type == 'sea':
+                    waternum = self.sea_prov_list.index(self.sea_province_array[waterx, watery]) \
+                           + len(self.prov_list) + 1  # We put sea provinces after land provinces in definitions.csv
+                elif crossing_type == 'river_large':
+                    waternum = self.river_prov_list.index(self.river_province_array[waterx, watery]) \
+                           + len(self.prov_list) + len(self.sea_prov_list) + 1
+                    # We put river provinces after land provinces in definitions.csv
+
+                provname_1 = self.prov_names[providx_1]
+                provname_2 = self.prov_names[providx_2]
+                provnum_1 = providx_1 + 1
+                provnum_2 = providx_2 + 1
+
+                if crossing_type == 'sea':
+                    crossings_file.write(f"{provnum_1};{provnum_2};{crossing_type};{waternum};{coords[0][1]};{self.height - coords[0][0]};"
+                                    f"{coords[1][1]};{self.height - coords[1][0]};{provname_1}-{provname_2}\n")
+                else:
+                    crossings_file.write(f"{provnum_1};{provnum_2};{crossing_type};{waternum};-1;-1;-1;-1;"
+                                    f"{provname_1}-{provname_2}\n")
+        crossings_file.write("-1;-1;;-1;-1;-1;-1;-1;")
+        crossings_file.close()
+        print("Writing Bridges")
+        bridges_file = open(self.gfx_dir_ck3 + "map\\map_object_data\\" + "bridges.txt", "w")
+        bridges_file.write('object={\n'
+                           '\tname="bridge 01"\n'
+                           '\tclamp_to_water_level=no\n'
+                           '\trender_under_water=yes\n'
+                           '\tgenerated_content=no\n'
+                           '\tlayer="temp_layer"\n'
+                           '\tpdxmesh="bridge_01_mesh"\n'
+                           f'\tcount={bridges}\n'
+                           '\ttransform="\n')
+        for idx, coords in enumerate(self.crossings_coord_list):
+            if len(coords) > 0:  # Test if array is empty (black or grey color)
+                rgb = self.unhash_pixel(int(self.crossings_list[idx]))
+                r = rgb[0]
+                if r == 0:
+                    crossing_type = 'river_large'
+                    bridges += 1
+                else:
+                    crossing_type = 'sea'
+                waterx = int((coords[0][0] + coords[1][0])/2)
+                watery = int((coords[0][1] + coords[1][1])/2)
+
+                if crossing_type == 'river_large':
+                    x = coords[1][1]
+                    elevation = 0
+                    y = self.width - coords[1][0]
+                    rotx = 0
+                    rotz = np.rad2deg(np.arctan2((coords[0][1] - coords[1][1]), (coords[1][0] - coords[0][0])))
+                    roty = 0
+                    rotw = 90
+                    width = 1
+                    height = 1
+                    length = 1
+
+                    bridges_file.write(f"{x} {elevation} {y} {rotx} {rotz} {roty} {rotw} {width} {height} {length}\n")
+
+        bridges_file.write('"}')
+        bridges_file.close()
 
 def main():
     world = Map()
