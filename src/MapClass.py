@@ -1,4 +1,3 @@
-import ast
 import os
 import random
 import time
@@ -9,12 +8,8 @@ import pandas as pd
 from collections import Counter
 import glob
 import io
-import cProfile
-import pstats
 import itertools
-from numba import jit
-import openpyxl
-import codecs
+
 
 
 start_time = time.time()
@@ -1121,75 +1116,112 @@ class Map():
 
         while sre < len(self.superregion_region_assign):
             if self.superregion_region_assign[sre]:
-                sreg_pix = self.unhash_pixel(self.superregions_list[sre])
-                if self.gen_empires:
-                    empire_capital = self.prov_names[self.area_prov_assign[self.region_area_assign[self.superregion_region_assign[sre][0]][0]][0]-1]
-                    landed_title_file.write(f"e_{self.superregion_names[sre]} = {{\n"
-                                            f"\tcolor = {{ {sreg_pix[0]} {sreg_pix[1]} {sreg_pix[2]} }}\n\tcolor2 = {{ 255 255 255 }}\n\t"
-                                            f"capital = c_{empire_capital}\n\n"
-                                            f"\tcan_create = {{\n\t\t\tNOT = {{\n\t\t\tfaith = {{\n\t\t\t\t"
-                                            f"religion_tag = christianity_religion\n\t\t\t\t"
-                                            f"has_doctrine = doctrine_spiritual_head\n\t\t\t}}\n\t\t}}\n\t}}"
-                                            f"\n\n\tai_primary_priority = {{\n\t\tif = {{\n\t\t\tlimit = {{\n\t\t\t\t"
-                                            f"culture_group = culture_group:central_germanic_group\n\t\t\t}}\n\t\t\t"
-                                            f"add = @correct_culture_primary_score\n\t\t}}\n\t}}")
+                if self.superregions_list[sre] != self.impassable_pixel:
+                    sreg_pix = self.unhash_pixel(self.superregions_list[sre])
+                    if self.gen_empires:
+                        # try:
+                        #     if not pd.isna(self.all_superregion_names_df.loc[self.all_superregion_names_df["codename_empire"] == self.superregion_names[sre]]["capital_county"].values[0]):
+                        #         empire_capital = self.all_superregion_names_df.loc[self.all_superregion_names_df["codename_empire"] == self.superregion_names[sre]]["capital_county"].values[0]
+                        #     else:
+                        #         empire_capital = self.prov_names[self.area_prov_assign[self.region_area_assign[self.superregion_region_assign[sre][0]][0]][0]-1]
+                        #
+                        #     landed_title_file.write(f"e_{self.superregion_names[sre]} = {{\n"
+                        #                             f"\tcolor = {{ {sreg_pix[0]} {sreg_pix[1]} {sreg_pix[2]} }}\n\tcolor2 = {{ 255 255 255 }}\n\t"
+                        #                             f"capital = c_{empire_capital}\n\n"
+                        #                             f"\tcan_create = {{\n\t\t\tNOT = {{\n\t\t\tfaith = {{\n\t\t\t\t"
+                        #                             f"religion_tag = christianity_religion\n\t\t\t\t"
+                        #                             f"has_doctrine = doctrine_spiritual_head\n\t\t\t}}\n\t\t}}\n\t}}"
+                        #                             f"\n\n\tai_primary_priority = {{\n\t\tif = {{\n\t\t\tlimit = {{\n\t\t\t\t"
+                        #                             f"culture_group = culture_group:central_germanic_group\n\t\t\t}}\n\t\t\t"
+                        #                             f"add = @correct_culture_primary_score\n\t\t}}\n\t}}")
+                        # except:
+                        empire_capital = self.prov_names[self.area_prov_assign[self.region_area_assign[self.superregion_region_assign[sre][0]][0]][0]-1]
+                        landed_title_file.write(f"e_{self.superregion_names[sre]} = {{\n"
+                                                f"\tcolor = {{ {sreg_pix[0]} {sreg_pix[1]} {sreg_pix[2]} }}\n\tcolor2 = {{ 255 255 255 }}\n\t"
+                                                f"capital = c_{empire_capital}\n\n"
+                                                f"\tcan_create = {{\n\t\t\tNOT = {{\n\t\t\tfaith = {{\n\t\t\t\t"
+                                                f"religion_tag = christianity_religion\n\t\t\t\t"
+                                                f"has_doctrine = doctrine_spiritual_head\n\t\t\t}}\n\t\t}}\n\t}}"
+                                                f"\n\n\tai_primary_priority = {{\n\t\tif = {{\n\t\t\tlimit = {{\n\t\t\t\t"
+                                                f"culture_group = culture_group:central_germanic_group\n\t\t\t}}\n\t\t\t"
+                                                f"add = @correct_culture_primary_score\n\t\t}}\n\t}}")
+                            # print(f"sre = {sre},\n"
+                            #       f"self.superregion_region_assign[sre] = {self.superregion_region_assign[sre]},"
+                            #       f"self.region_area_assign[above] = {[self.superregion_region_assign[sre][0]]}")
 
 
+                    # landed_title_file.write("regions = {\n\t\t")
+                    re = 0
+                    localisation_file.write(f' e_{self.superregion_names[sre-1]}:0 "{self.superregion_loc_names[sre-1]}"\n')
+                    for region in (self.superregion_region_assign[sre]):
+                        reg_pix = self.unhash_pixel(self.regions_list[region])
+                        if self.gen_kingdoms:
+                            # try:
+                            #     k_capital = self.all_region_names_df.loc[self.all_region_names_df["codename_kingdom"] == self.region_names[region]]["capital_county"].values[0]
+                            #     if not pd.isna(k_capital):
+                            #         kingdom_capital = k_capital
+                            #     else:
+                            #         kingdom_capital = self.prov_names[self.area_prov_assign[self.region_area_assign[self.superregion_region_assign[sre][self.superregion_region_assign[sre].index(region)]][0]][0]-1]
+                            # except:
+                            #     try:
+                            kingdom_capital = self.prov_names[self.area_prov_assign[self.region_area_assign[self.superregion_region_assign[sre][self.superregion_region_assign[sre].index(region)]][0]][0]-1]
+                            landed_title_file.write(f"\n\n\tk_{self.region_names[region]} = {{\n\t\tcolor = {{ {reg_pix[0]} {reg_pix[1]} {reg_pix[2]} }}\n"
+                                            f"\n\t\tcapital = c_{kingdom_capital}\n" # COULD BE PROBLEMATIC
+                                            f"\n\t\tcan_create = {{\n\t\t\tNOT = {{\n\t\t\t\tfaith = {{\n\t\t\t\t\t"
+                                            f"religion_tag = christianity_religion\n\t\t\t\t\t"
+                                            f"has_doctrine = doctrine_spiritual_head\n\t\t\t\t}}\n\t\t\t}}\n\t\t}}"
+                                            f"\n\n\t\tai_primary_priority = {{\n\t\t\tif = {{\n\t\t\t\tlimit = {{\n\t\t\t\t\t"
+                                            f"culture_group = culture_group:central_germanic_group\n\t\t\t\t}}\n\t\t\t\t"
+                                            f"add = @correct_culture_primary_score\n\t\t\t}}\n\t\t}}")
+                                # except:
+                                #     pass
 
-                # landed_title_file.write("regions = {\n\t\t")
-                re = 0
-                localisation_file.write(f' e_{self.superregion_names[sre-1]}:0 "{self.superregion_loc_names[sre-1]}"\n')
-                for region in (self.superregion_region_assign[sre]):
-                    reg_pix = self.unhash_pixel(self.regions_list[region])
-                    if self.gen_kingdoms:
-                        kingdom_capital = self.prov_names[self.area_prov_assign[self.region_area_assign[self.superregion_region_assign[sre][self.superregion_region_assign[sre].index(region)]][0]][0]-1]
-                        landed_title_file.write(f"\n\n\tk_{self.region_names[region]} = {{\n\t\tcolor = {{ {reg_pix[0]} {reg_pix[1]} {reg_pix[2]} }}\n"
-                                                f"\n\t\tcapital = c_{kingdom_capital}\n" # COULD BE PROBLEMATIC
-                                                f"\n\t\tcan_create = {{\n\t\t\tNOT = {{\n\t\t\t\tfaith = {{\n\t\t\t\t\t"
-                                                f"religion_tag = christianity_religion\n\t\t\t\t\t"
-                                                f"has_doctrine = doctrine_spiritual_head\n\t\t\t\t}}\n\t\t\t}}\n\t\t}}"
-                                                f"\n\n\t\tai_primary_priority = {{\n\t\t\tif = {{\n\t\t\t\tlimit = {{\n\t\t\t\t\t"
-                                                f"culture_group = culture_group:central_germanic_group\n\t\t\t\t}}\n\t\t\t\t"
-                                                f"add = @correct_culture_primary_score\n\t\t\t}}\n\t\t}}")
+                        ar = 0
+                        localisation_file.write(f' k_{self.region_names[region]}:0 "{self.region_loc_names[region]}"\n')
+                        for area in (self.region_area_assign[region]):
+                            area_pix = self.unhash_pixel(self.areas_list[area])
 
-                    ar = 0
-                    localisation_file.write(f' k_{self.region_names[region]}:0 "{self.region_loc_names[region]}"\n')
-                    for area in (self.region_area_assign[region]):
-                        area_pix = self.unhash_pixel(self.areas_list[area])
-                        duchy_capital = self.prov_names[self.area_prov_assign[self.region_area_assign[self.superregion_region_assign[sre][self.superregion_region_assign[sre].index(region)]][ar]][0]-1]
-                        landed_title_file.write(f"\n\n\t\td_{self.area_names[(area)]} = {{"
-                                                f"\n\t\t\tcolor = {{ {area_pix[0]} {area_pix[1]} {area_pix[2]} }}\n\t\t\tcolor2 = {{ 255 255 255 }}"
-                                                f"\n\n\t\t\tcapital = c_{duchy_capital}")
-                        co = 0
-                        localisation_file.write(f' d_{self.area_names[area]}:0 "{self.area_loc_names[area]}"\n') #CHANGED
-                        for county in self.area_prov_assign[area]:
-                            co_pix = self.unhash_pixel(self.prov_list[county-1])
-                            county_name = self.prov_names[county-1]
-                            capital_name = self.prov_capital_names[county-1]
-                            county_loc_name = self.prov_loc_names[county-1]
-                            capital_loc_name = self.prov_loc_capital_names[county-1]
-                            landed_title_file.write(f"\n\n\t\t\tc_{county_name} = {{\n\t\t\t\t"
-                                                    f"color = {{ {co_pix[0]} {co_pix[1]} {co_pix[2]} }}\n\t\t\t\tcolor2 = {{ 255 255 255 }}\n"
-                                                    f"\n\t\t\t\tb_{capital_name} = {{\n\t\t\t\t\t"
-                                                    f"province = {county}\n\n\t\t\t\t\t"
-                                                    f"color = {{ {co_pix[0]} {co_pix[1]} {co_pix[2]} }}\n\t\t\t\t\tcolor2 = {{ 255 255 255 }}\n"
-                                                    f"\n\t\t\t\t}}")
-                            localisation_file.write(f' c_{county_name}:0 "{county_loc_name}"\n'
-                                                    f' b_{capital_name}:0 "{capital_loc_name}"\n')
+                            # try:
+                            #     d_capital = self.all_area_names_df.loc[self.all_area_names_df["codename_duchy"] == self.area_names[area]]["capital_county"].values[0]
+                            #     if not pd.isna(d_capital):
+                            #         duchy_capital = d_capital
+                            #     else:
+                            #         duchy_capital = self.prov_names[self.area_prov_assign[self.region_area_assign[self.superregion_region_assign[sre][self.superregion_region_assign[sre].index(region)]][ar]][0]-1]
+                            # except:
+                            duchy_capital = self.prov_names[self.area_prov_assign[self.region_area_assign[self.superregion_region_assign[sre][self.superregion_region_assign[sre].index(region)]][ar]][0]-1]
+                            landed_title_file.write(f"\n\n\t\td_{self.area_names[(area)]} = {{"
+                                                    f"\n\t\t\tcolor = {{ {area_pix[0]} {area_pix[1]} {area_pix[2]} }}\n\t\t\tcolor2 = {{ 255 255 255 }}"
+                                                    f"\n\n\t\t\tcapital = c_{duchy_capital}")
+                            co = 0
+                            localisation_file.write(f' d_{self.area_names[area]}:0 "{self.area_loc_names[area]}"\n') #CHANGED
+                            for county in self.area_prov_assign[area]:
+                                co_pix = self.unhash_pixel(self.prov_list[county-1])
+                                county_name = self.prov_names[county-1]
+                                capital_name = self.prov_capital_names[county-1]
+                                county_loc_name = self.prov_loc_names[county-1]
+                                capital_loc_name = self.prov_loc_capital_names[county-1]
+                                landed_title_file.write(f"\n\n\t\t\tc_{county_name} = {{\n\t\t\t\t"
+                                                        f"color = {{ {co_pix[0]} {co_pix[1]} {co_pix[2]} }}\n\t\t\t\tcolor2 = {{ 255 255 255 }}\n"
+                                                        f"\n\t\t\t\tb_{capital_name} = {{\n\t\t\t\t\t"
+                                                        f"province = {county}\n\n\t\t\t\t\t"
+                                                        f"color = {{ {co_pix[0]} {co_pix[1]} {co_pix[2]} }}\n\t\t\t\t\tcolor2 = {{ 255 255 255 }}\n"
+                                                        f"\n\t\t\t\t}}")
+                                localisation_file.write(f' c_{county_name}:0 "{county_loc_name}"\n'
+                                                        f' b_{capital_name}:0 "{capital_loc_name}"\n')
 
 
-                            landed_title_file.write(f"\n\t\t\t}}")
-                            co += 1
+                                landed_title_file.write(f"\n\t\t\t}}")
+                                co += 1
 
 
-                        landed_title_file.write(f"\n\t\t}}")
-                        ar += 1
+                            landed_title_file.write(f"\n\t\t}}")
+                            ar += 1
 
-                    if self.gen_kingdoms:
-                        landed_title_file.write(f"\n\t}}")
-                    re += 1
-                if self.gen_empires:
-                    landed_title_file.write(f"\n}}\n\n")
+                        if self.gen_kingdoms:
+                            landed_title_file.write(f"\n\t}}")
+                        re += 1
+                    if self.gen_empires:
+                        landed_title_file.write(f"\n}}\n\n")
             sre += 1
 
 
@@ -1204,14 +1236,26 @@ class Map():
                 if not pd.isna(empire_owner_id):
                     empire_name = np.array(self.all_superregion_names_df["codename_empire"])[emp_idx]
                     empire_gov = np.array(self.all_superregion_names_df["government"])[emp_idx]
+
                     if pd.isna(empire_gov):
                         empire_gov = "feudal_government"
                     self.title_history_file_ck3.write(f'e_{empire_name} = {{'
                                                       f'\n\t1443.1.1 = {{'
                                                       f'\n\t\tgovernment = {empire_gov}'
                                                       f'\n\t\tholder = {empire_owner_id}'
-                                                      f'\n\t}}'
-                                                      f'\n}}\n')
+                                                      f'\n\t}}')
+                    try:
+                        empire_succession_laws = np.array(self.all_superregion_names_df["realm_succession_laws"])[emp_idx].split(';')
+                        for idx, law in enumerate(empire_succession_laws):
+                            self.title_history_file_ck3.write(f'\n\t1443.1.{idx+2} = {{'
+                                                              f'\n\t\tsuccession_laws = {{ {law} }}'
+                                                              f'\n\t}}')
+                    except:
+                        pass
+
+
+                    self.title_history_file_ck3.write(f'\n}}\n')
+
         for king_idx,kingdom in enumerate(self.all_region_names_df.values):
             kingdom_owner_id = self.all_region_names_df.iloc[king_idx]["owner_id"]
             if kingdom[1] in self.region_names:
@@ -1220,20 +1264,36 @@ class Map():
                     kingdom_gov = np.array(self.all_region_names_df["government"])[king_idx]
                     if pd.isna(kingdom_gov):
                         kingdom_gov = "feudal_government"
+
                     self.title_history_file_ck3.write(f'k_{kingdom_name} = {{'
                                                       f'\n\t1443.1.1 = {{'
                                                       f'\n\t\tgovernment = {kingdom_gov}'
                                                       f'\n\t\tholder = {kingdom_owner_id}')
-                    if not pd.isna(np.array(((self.characters_df.loc[self.characters_df["ID"] == kingdom_owner_id])["Liege Title"])))\
-                            and kingdom_owner_id in list(self.characters_df["ID"].astype(str)): # Checking if the kingdom has an owner
-                        self.title_history_file_ck3.write(
-                                                          f'\n\t\tliege = {np.array(((self.characters_df.loc[self.characters_df["ID"] == kingdom_owner_id])["Liege Title"]))[0]}'
-                                                          f'\n\t}}'
-                                                          f'\n}}\n')
-                    else:
-                        self.title_history_file_ck3.write(
-                                                          f'\n\t}}'
-                                                          f'\n}}\n')
+                    try:
+                        if not pd.isna(np.array(((self.characters_df.loc[self.characters_df["ID"] == kingdom_owner_id])["Liege Title"])))\
+                                and kingdom_owner_id in list(self.characters_df["ID"].astype(str)):
+                            self.title_history_file_ck3.write(
+                                                              f'\n\t\tliege = {np.array(((self.characters_df.loc[self.characters_df["ID"] == kingdom_owner_id])["Liege Title"]))[0]}'
+                                                              f'\n\t}}')
+                        else:
+                            self.title_history_file_ck3.write(f'\n\t}}')
+
+                    except:
+                        print(f'characters_df["ID"] == {self.characters_df["ID"]}\n'
+                              f'kingdom_owner_id = {kingdom_owner_id}\n'
+                              f'self.characters_df.loc[self.characters_df["ID"] == kingdom_owner_id] = {self.characters_df.loc[self.characters_df["ID"] == kingdom_owner_id]}')
+
+                    try:
+                        kingdom_succession_laws = np.array(self.all_region_names_df["realm_succession_laws"])[king_idx].split(';')
+                        for idx, law in enumerate(kingdom_succession_laws):
+                            self.title_history_file_ck3.write(f'\n\t1443.1.{idx+2} = {{'
+                                                              f'\n\t\tsuccession_laws = {{ {law} }}'
+                                                              f'\n\t}}')
+                    except:
+                        pass
+
+                    self.title_history_file_ck3.write(f'\n}}\n')
+
         for duc_idx,duchy in enumerate(self.all_area_names_df.values):
             duchy_owner_id = self.all_area_names_df.iloc[duc_idx]["owner_id"]
             if duchy[1] in self.area_names:
@@ -1252,16 +1312,23 @@ class Map():
                                 and duchy_owner_id in list(self.characters_df["ID"].astype(str)):
                             self.title_history_file_ck3.write(
                                                               f'\n\t\tliege = {np.array(((self.characters_df.loc[self.characters_df["ID"] == duchy_owner_id])["Liege Title"]))[0]}'
-                                                              f'\n\t}}'
-                                                              f'\n}}\n')
+                                                              f'\n\t}}')
                         else:
-                            self.title_history_file_ck3.write(
-                                                              f'\n\t}}'
-                                                              f'\n}}\n')
+                            self.title_history_file_ck3.write(f'\n\t}}')
+
                     except:
                         print(f'characters_df["ID"] == {self.characters_df["ID"]}\n'
                               f'duchy_owner_id = {duchy_owner_id}\n'
                               f'self.characters_df.loc[self.characters_df["ID"] == duchy_owner_id] = {self.characters_df.loc[self.characters_df["ID"] == duchy_owner_id]}')
+                    try:
+                        ducal_succession_laws = np.array(self.all_area_names_df["realm_succession_laws"])[duc_idx].split(';')
+                        for idx, law in enumerate(ducal_succession_laws):
+                            self.title_history_file_ck3.write(f'\n\t1443.1.{idx+2} = {{'
+                                                              f'\n\t\tsuccession_laws = {{ {law} }}'
+                                                              f'\n\t}}')
+                    except:
+                        pass
+                    self.title_history_file_ck3.write(f'\n}}\n')
         for i1, area in enumerate(self.area_prov_assign):
             # dynasty = 5000000+i1
             # self.character_file.write(f'{i1+10000} = {{'
@@ -1342,6 +1409,8 @@ class Map():
                         char_trait28 = self.characters_df['trait28'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
                         char_trait29 = self.characters_df['trait29'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
                         char_trait30 = self.characters_df['trait30'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
+
+                        realm_laws = self.characters_df['realm_succession_laws'][np.where(self.characters_df['ID'] == self.prov_characters_list[idx])[0][0]]
 
                         if char_write != "No" and char_write != "no" and char_write != "N" and char_write != "n":
 
@@ -1447,6 +1516,12 @@ class Map():
                                 self.character_file.write(f'\n\ttrait = {char_trait29}')
                             if not pd.isna(char_trait30):
                                 self.character_file.write(f'\n\ttrait = {char_trait30}')
+                            if not pd.isna(realm_laws):
+                                realm_laws_list = realm_laws.split(';')
+                                self.character_file.write(f'\n\t1443.1.1 = {{')
+                                for idx, law in enumerate(realm_laws_list):
+                                    self.character_file.write(f'\n\t\tadd_realm_law = {law}')
+                                self.character_file.write(f'\n\t}}')
 
 
                             self.character_file.write(f'\n\t{char_birthdate} = {{'
@@ -1499,6 +1574,8 @@ class Map():
                 except:
                     county_gov = "feudal_government"
 
+
+
                 self.title_history_file_ck3.write(f'c_{self.prov_names[idx]} = {{'
                                                   f'\n\t1443.1.1 = {{'
                                                   f'\n\t\tchange_development_level = {int(self.development_list[idx])}'
@@ -1532,6 +1609,7 @@ class Map():
 
     def write_province_history_files_ck3(self):
         prov_history_file = open(self.history_dir_ck3 + "\\provinces\\" + "gem_earth.txt", "w")
+
         for i in range(len(self.prov_list)):
             if len(self.culture_list[i]) == 0:
                 prov_history_file.write(f"{i+1} = {{\t#BLACK"
@@ -1542,11 +1620,19 @@ class Map():
                                         f"\n\t}}"
                                         f"\n}}\n")
             else:
+                try:
+                    if not pd.isna(self.all_prov_names_df.loc[self.all_prov_names_df["codename_county"] == self.prov_names[i]]["holding_type"].values[0]):
+                        county_holding_type = self.all_prov_names_df.loc[self.all_prov_names_df["codename_county"] == self.prov_names[i]]["holding_type"].values[0]
+                    else:
+                        county_holding_type = "castle_holding"
+                except:
+                    county_holding_type = "castle_holding"
+
                 prov_history_file.write(f"{i+1} = {{\t#{self.prov_names[i]}"
                                         f"\n\t980.1.1 = {{"
                                         f"\n\t\tculture = {self.culture_list[i]}"
                                         f"\n\t\treligion = {self.religion_list[i]}"
-                                        f"\n\t\tholding = castle_holding"
+                                        f"\n\t\tholding = {county_holding_type}"
                                         f"\n\t}}"
                                         f"\n}}\n")
 
